@@ -1,0 +1,770 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>408 Pilot · 考研 AI 学习舱 | 智能备考平台</title>
+  <meta name="description" content="408 Pilot - 面向计算机考研的 AI 学习平台，集成知识图谱、智能刷题、个性化计划与全科复盘。" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="/static/home.css?v=20260731-login-fix-1" />
+</head>
+<body>
+  <!-- 滚动进度条 -->
+  <div class="scroll-progress" id="scrollProgress"></div>
+
+  <!-- 背景层：渐变 + 粒子（视口固定，不随页面滚动） -->
+  <div class="bg-layer">
+    <div class="bg-gradient"></div>
+    <div class="bg-orbs">
+      <span class="orb orb-1"></span>
+      <span class="orb orb-2"></span>
+      <span class="orb orb-3"></span>
+    </div>
+    <canvas id="particleCanvas" class="bg-particles"></canvas>
+    <div class="bg-scanline"></div>
+  </div>
+
+  <!-- 静态 0/1 散点：铺满整页，自身缓慢上飘（canvas 实现，单图层 0 DOM 节点） -->
+  <canvas class="bg-binary" id="bgBinary" aria-hidden="true"></canvas>
+
+  <!-- 自定义光标 -->
+  <div class="cursor-dot" id="cursorDot"></div>
+  <div class="cursor-ring" id="cursorRing"></div>
+
+  <!-- 顶部导航 -->
+  <header class="top-nav">
+    <div class="nav-inner">
+      <a class="brand" href="/home">
+        <span class="brand-mark">408</span>
+        <span class="brand-name">408 Pilot</span>
+        <span class="brand-tag">AI 学习舱</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#features">功能矩阵</a>
+        <a href="#architecture">智能引擎</a>
+        <a href="#showcase">实战演示</a>
+        <a href="#stats">数据底座</a>
+        <a href="#faq">常见问题</a>
+      </nav>
+      <div class="nav-actions">
+        <a class="btn btn-ghost" id="openLoginBtn" href="#authModal" role="button">登录</a>
+        <button class="btn btn-primary" id="openRegisterBtn">免费注册</button>
+      </div>
+      <button class="nav-burger" id="navBurger" aria-label="菜单">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-inner">
+      <div class="hero-eyebrow">
+        <span class="dot"></span>
+        <span>MULTI-AGENT · RAG · KNOWLEDGE GRAPH</span>
+      </div>
+      <h1 class="hero-title">
+        <span class="hero-line">把 408 考研</span>
+        <span class="grad-text glitch" data-text="变成一条清晰的上岸路线">变成一条清晰的上岸路线</span>
+      </h1>
+      <p class="hero-subtitle">
+        融合多智能体编排、知识图谱与真题语料，从知识点讲解、智能刷题到薄弱点复盘，
+        给计算机考研人一个真正能跑通的全流程学习操作系统。
+      </p>
+
+      <div class="hero-cta">
+        <a class="btn btn-cta btn-cta-primary" id="heroChatBtn" href="#authModal" role="button">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM7 9h10v2H7V9zm6 5H7v-2h6v2zm-2-5h-2V7h2v2z"/></svg>
+          <span>进入 AI 对话舱</span>
+          <span class="btn-shine"></span>
+        </a>
+        <button class="btn btn-cta btn-cta-secondary" id="heroFeatureBtn">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2 2 7l10 5 10-5-10-5zm0 7L2 14l10 5 10-5-10-5zm0 7L2 21l10 5 10-5-10-5z"/></svg>
+          <span>了解功能矩阵</span>
+        </button>
+      </div>
+
+      <div class="hero-metrics" id="heroMetrics">
+        <div class="metric"><strong data-num="4">4</strong><span>核心科目</span></div>
+        <div class="metric"><strong data-num="18">18</strong><span>年份真题</span></div>
+        <div class="metric"><strong data-num="12000">12,000</strong><span>知识点颗粒</span></div>
+        <div class="metric"><strong data-num="24">24</strong><span>7×24h 答疑</span></div>
+      </div>
+
+      <!-- 装饰：终端 / 数据流卡片 -->
+      <div class="hero-decor">
+        <!-- 倒计时 + 智能复习计划 -->
+        <div class="decor-card decor-countdown tilt-card">
+          <div class="cd-head">
+            <span class="cd-label">距 2027 考研初试</span>
+            <span class="cd-pulse"></span>
+          </div>
+          <div class="cd-main">
+            <div class="cd-number" id="cdDays">—</div>
+            <div class="cd-unit">天</div>
+          </div>
+          <div class="cd-date">2026 · 12 · 26  开考</div>
+
+          <ul class="cd-features">
+            <li>
+              <i class="cd-ico" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              </i>
+              <div>
+                <b>个性化复习计划</b>
+                <span>根据你的基础和目标院校动态排程</span>
+              </div>
+            </li>
+            <li>
+              <i class="cd-ico" style="background:linear-gradient(135deg,#06b6d4,#10b981)">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-5"/></svg>
+              </i>
+              <div>
+                <b>实时进度追踪</b>
+                <span>四科复习情况一目了然</span>
+              </div>
+            </li>
+            <li>
+              <i class="cd-ico" style="background:linear-gradient(135deg,#f59e0b,#ec4899)">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.5 0 4.7 1 6.4 2.6"/><path d="M21 4v5h-5"/></svg>
+              </i>
+              <div>
+                <b>动态调整策略</b>
+                <span>薄弱知识点自动加强练习</span>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <!-- 知识图谱（保留） -->
+        <div class="decor-card decor-radar tilt-card">
+          <div class="radar-title">
+            <span>408 知识图谱 · 实时活跃</span>
+            <span class="radar-tag">SYNC</span>
+          </div>
+          <div class="radar">
+            <div class="radar-ring r1"></div>
+            <div class="radar-ring r2"></div>
+            <div class="radar-ring r3"></div>
+            <div class="radar-sweep"></div>
+            <div class="radar-line l1"></div>
+            <div class="radar-line l2"></div>
+            <div class="radar-line l3"></div>
+            <div class="radar-node n1">DS</div>
+            <div class="radar-node n2">CO</div>
+            <div class="radar-node n3">OS</div>
+            <div class="radar-node n4">CN</div>
+            <div class="radar-node n5 core">●</div>
+          </div>
+          <div class="radar-foot">
+            <span><i style="background:#6366f1"></i>数据结构</span>
+            <span><i style="background:#10b981"></i>计组</span>
+            <span><i style="background:#f59e0b"></i>操作系统</span>
+            <span><i style="background:#ec4899"></i>计网</span>
+          </div>
+        </div>
+
+        <!-- 智能题库 -->
+        <div class="decor-card decor-quiz tilt-card">
+          <div class="quiz-head">
+            <span class="quiz-tag">智能题库</span>
+            <span class="quiz-source">2009 — 2026 真题</span>
+          </div>
+          <ul class="quiz-features">
+            <li>
+              <i class="quiz-num">01</i>
+              <div>
+                <b>18 年真题精编</b>
+                <span>2009 — 2026 年 408 与名校自主命题完整收录</span>
+              </div>
+            </li>
+            <li>
+              <i class="quiz-num">02</i>
+              <div>
+                <b>AI 智能推题</b>
+                <span>依据错题本与薄弱点定向推送强化练习</span>
+              </div>
+            </li>
+            <li>
+              <i class="quiz-num">03</i>
+              <div>
+                <b>即时深度解析</b>
+                <span>思路 + 知识点图谱 + 同类拓展题一站搞定</span>
+              </div>
+            </li>
+            <li>
+              <i class="quiz-num">04</i>
+              <div>
+                <b>错题本自动归纳</b>
+                <span>做错题目智能归档，支持收藏与重做</span>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 数据滚动条 (stock-ticker) -->
+  <div class="ticker">
+    <div class="ticker-label">▌LIVE FEED</div>
+    <div class="ticker-track">
+      <div class="ticker-content" id="tickerContent"></div>
+      <div class="ticker-content" aria-hidden="true" id="tickerContent2"></div>
+    </div>
+  </div>
+
+  <!-- 功能矩阵 -->
+  <section id="features" class="section">
+    <div class="section-inner">
+      <div class="section-head">
+        <span class="eyebrow eyebrow-hex">// 01 · FEATURE MATRIX</span>
+        <h2 class="section-title">六位一体的智能学习矩阵</h2>
+        <p>从输入题目到输出上岸路径，每一步都有 AI 协作者为你把关。</p>
+      </div>
+      <div class="feature-grid">
+        <article class="feature-card tilt-card" data-color="indigo">
+          <span class="feature-num">01</span>
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM7 9h10v2H7V9zm6 5H7v-2h6v2z"/></svg>
+          </div>
+          <h3>AI 对话舱</h3>
+          <p>按 408 范围讲题，给出答案、思路和踩分点；支持追问、复盘、举一反三。</p>
+          <span class="feature-tag">对话 · 追问</span>
+        </article>
+        <article class="feature-card tilt-card" data-color="emerald">
+          <span class="feature-num">02</span>
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+          </div>
+          <h3>题库作战台</h3>
+          <p>18+ 年真题结构化拆解，按科目、年份、状态、收藏多维筛选，刷题像打游戏一样有反馈。</p>
+          <span class="feature-tag">真题 · 数据</span>
+        </article>
+        <article class="feature-card tilt-card" data-color="amber">
+          <span class="feature-num">03</span>
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          </div>
+          <h3>知识图谱</h3>
+          <p>把章节、考点和真题连成网，定位薄弱节点，让复习路径可见、可量化、可优化。</p>
+          <span class="feature-tag">图谱 · 关联</span>
+        </article>
+        <article class="feature-card tilt-card" data-color="pink">
+          <span class="feature-num">04</span>
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z"/></svg>
+          </div>
+          <h3>学习计划</h3>
+          <p>结合目标分数与当前掌握度，AI 自动生成冲刺 / 基础 / 强化多阶段任务清单。</p>
+          <span class="feature-tag">规划 · 节奏</span>
+        </article>
+        <article class="feature-card tilt-card" data-color="cyan">
+          <span class="feature-num">05</span>
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+          </div>
+          <h3>个人中心</h3>
+          <p>正确率、刷题热力、错题本、错因分析，一图看懂自己的成长曲线与卡点。</p>
+          <span class="feature-tag">画像 · 复盘</span>
+        </article>
+        <article class="feature-card tilt-card" data-color="violet">
+          <span class="feature-num">06</span>
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+          </div>
+          <h3>408 笔记库</h3>
+          <p>王道、灰灰、里昂学长等多套权威笔记去水印整理，AI 引用即得，备考无死角。</p>
+          <span class="feature-tag">资料 · 引用</span>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 智能引擎 -->
+  <section id="architecture" class="section section-alt">
+    <div class="section-inner">
+      <div class="section-head">
+        <span class="eyebrow eyebrow-hex">// 02 · INTELLIGENT ENGINE</span>
+        <h2 class="section-title">多 Agent 协同 · 一次提问，五步闭环</h2>
+        <p>意图识别 → 知识检索 → 图谱关联 → 解答生成 → 个性化复盘，端到端可控。</p>
+      </div>
+
+      <div class="arch-flow">
+        <div class="arch-step" data-step="01">
+          <div class="arch-dot"></div>
+          <h4>意图识别</h4>
+          <p>判断题型 / 知识点 / 学习阶段，路由到对应 Agent。</p>
+        </div>
+        <div class="arch-arrow"></div>
+        <div class="arch-step" data-step="02">
+          <div class="arch-dot"></div>
+          <h4>RAG 检索</h4>
+          <p>从题库与笔记库中检索相关片段，证据先行。</p>
+        </div>
+        <div class="arch-arrow"></div>
+        <div class="arch-step" data-step="03">
+          <div class="arch-dot"></div>
+          <h4>图谱关联</h4>
+          <p>串联章节与高频考点，挖掘横向联系。</p>
+        </div>
+        <div class="arch-arrow"></div>
+        <div class="arch-step" data-step="04">
+          <div class="arch-dot"></div>
+          <h4>解答生成</h4>
+          <p>结构化输出答案、思路、踩分点与拓展题。</p>
+        </div>
+        <div class="arch-arrow"></div>
+        <div class="arch-step" data-step="05">
+          <div class="arch-dot"></div>
+          <h4>复盘沉淀</h4>
+          <p>错题入库、掌握度更新，喂养下一次计划。</p>
+        </div>
+      </div>
+
+      <div class="arch-panels">
+        <div class="arch-panel tilt-card">
+          <div class="arch-panel-head">
+            <span class="chip chip-indigo">Intent Router</span>
+            <span class="chip-soft">智能体 1</span>
+          </div>
+          <p>把自然语言问题转译为可执行任务，识别「讲题 / 计划 / 复盘 / 押题」等意图。</p>
+          <div class="arch-progress"><i style="--w:94%"></i></div>
+        </div>
+        <div class="arch-panel tilt-card">
+          <div class="arch-panel-head">
+            <span class="chip chip-emerald">RAG Retriever</span>
+            <span class="chip-soft">智能体 2</span>
+          </div>
+          <p>在 18+ 年真题与权威笔记中找证据，避免模型幻觉，确保每条结论可追溯。</p>
+          <div class="arch-progress"><i style="--w:88%"></i></div>
+        </div>
+        <div class="arch-panel tilt-card">
+          <div class="arch-panel-head">
+            <span class="chip chip-amber">Graph Engine</span>
+            <span class="chip-soft">智能体 3</span>
+          </div>
+          <p>基于知识图谱做关联与高亮，从「单题」升级为「网络级」理解。</p>
+          <div class="arch-progress"><i style="--w:82%"></i></div>
+        </div>
+        <div class="arch-panel tilt-card">
+          <div class="arch-panel-head">
+            <span class="chip chip-pink">Solution Agent</span>
+            <span class="chip-soft">智能体 4</span>
+          </div>
+          <p>按 408 阅卷习惯输出答案与解析，结构清晰，可直接用于背诵与复述。</p>
+          <div class="arch-progress"><i style="--w:90%"></i></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 实战演示：三个使用场景 -->
+  <section id="showcase" class="section">
+    <div class="section-inner">
+      <div class="section-head">
+        <span class="eyebrow eyebrow-hex">// 03 · LIVE SHOWCASE</span>
+        <h2 class="section-title">三种典型场景，AI 接管你的备考节奏</h2>
+        <p>刷题、复盘、规划，每条路径都经过真实考生验证。</p>
+      </div>
+
+      <div class="showcase">
+        <div class="showcase-tab" data-tab="1">
+          <span class="tab-num">01</span>
+          <span>刷题讲题</span>
+          <i></i>
+        </div>
+        <div class="showcase-tab active" data-tab="2">
+          <span class="tab-num">02</span>
+          <span>错题复盘</span>
+          <i></i>
+        </div>
+        <div class="showcase-tab" data-tab="3">
+          <span class="tab-num">03</span>
+          <span>冲刺计划</span>
+          <i></i>
+        </div>
+
+        <div class="showcase-stage">
+          <!-- 场景 1：刷题讲题 -->
+          <div class="showcase-pane" data-pane="1">
+            <div class="showcase-left">
+              <h4>把一道 23 年真题扔给 AI</h4>
+              <p>AI 自动识别考点、调用知识图谱与真题语料，输出结构化答案与拓展训练。</p>
+              <ul class="showcase-list">
+                <li><span>·</span>意图识别 → 知识点：虚拟存储 / 页面置换</li>
+                <li><span>·</span>RAG 检索 8 篇证据 · 图谱关联 12 节点</li>
+                <li><span>·</span>输出：答案 + 思路 + 踩分点 + 拓展题 3 道</li>
+              </ul>
+            </div>
+            <div class="showcase-right tilt-card">
+              <div class="show-chat">
+                <div class="chat-msg user">进程页面置换算法中，FIFO 与 LRU 各自的优劣是什么？</div>
+                <div class="chat-msg ai">
+                  <p>1) FIFO：实现简单，但存在 Belady 异常。</p>
+                  <p>2) LRU：性能更接近 OPT，但硬件实现成本高。</p>
+                  <p class="ok">✔ 已生成对比表 + 模拟演示 + 3 道拓展</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 场景 2：错题复盘 -->
+          <div class="showcase-pane active" data-pane="2">
+            <div class="showcase-left">
+              <h4>把错题丢进来，让 AI 拆解错因</h4>
+              <p>不只是给答案，而是从「知识点 / 思路 / 计算 / 审题」四个维度拆开你的薄弱点。</p>
+              <ul class="showcase-list">
+                <li><span>·</span>错题自动归类 · 按错因聚合</li>
+                <li><span>·</span>相似题推送 · 同类考点反复练</li>
+                <li><span>·</span>每周末生成复盘报告，喂给下次计划</li>
+              </ul>
+            </div>
+            <div class="showcase-right tilt-card">
+              <div class="show-review">
+                <div class="review-head">
+                  <span class="review-tag tag-red">错因 · 概念混淆</span>
+                  <span class="review-meta">3 次 / 近 7 天</span>
+                </div>
+                <div class="review-title">关于 Cache 与 TLB 的关系，下列说法正确的是？</div>
+                <div class="review-choices">
+                  <div class="rc">A. TLB 是 Cache 的一种 ✓</div>
+                  <div class="rc right">B. TLB 用于加速页表查找 → 你的选择</div>
+                  <div class="rc">C. TLB 与 Cache 是同一硬件</div>
+                  <div class="rc">D. TLB 命中率与 Cache 命中率无关</div>
+                </div>
+                <div class="review-foot">
+                  <span>建议练习：<b>TLB · 页表 · 命中率</b> 12 题</span>
+                  <span class="review-go">→ 立即开练</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 场景 3：冲刺计划 -->
+          <div class="showcase-pane" data-pane="3">
+            <div class="showcase-left">
+              <h4>剩下 90 天，AI 帮你拆解每一天</h4>
+              <p>结合你的目标分数、当前掌握度与可用时间，输出阶段任务清单与每日补给。</p>
+              <ul class="showcase-list">
+                <li><span>·</span>基础 / 强化 / 冲刺三段式</li>
+                <li><span>·</span>每日补给：5 题 + 1 个知识点 + 1 段复盘</li>
+                <li><span>·</span>关键节点自动提醒，全真模拟自动排期</li>
+              </ul>
+            </div>
+            <div class="showcase-right tilt-card">
+              <div class="show-plan">
+                <div class="plan-row">
+                  <span class="plan-phase">01 · 筑基</span>
+                  <span class="plan-range">06.07 - 07.31</span>
+                  <div class="plan-bar"><i style="--w:100%"></i></div>
+                </div>
+                <div class="plan-row">
+                  <span class="plan-phase">02 · 攻坚</span>
+                  <span class="plan-range">08.01 - 09.30</span>
+                  <div class="plan-bar"><i style="--w:62%"></i></div>
+                </div>
+                <div class="plan-row">
+                  <span class="plan-phase">03 · 冲刺</span>
+                  <span class="plan-range">10.01 - 12.20</span>
+                  <div class="plan-bar"><i style="--w:18%"></i></div>
+                </div>
+                <div class="plan-today">今日 · 数据结构 · 树与二叉树 · 6 题</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 数据底座 -->
+  <section id="stats" class="section section-alt">
+    <div class="section-inner">
+      <div class="section-head">
+        <span class="eyebrow eyebrow-hex">// 04 · DATA FOUNDATION</span>
+        <h2 class="section-title">看得见的数据底座</h2>
+        <p>把模糊的努力变成可量化的进步，每一次刷题都在喂养你的上岸概率。</p>
+      </div>
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat-card tilt-card">
+          <div class="stat-num" data-target="18" data-suffix=" 年">0</div>
+          <div class="stat-label">年份真题库</div>
+          <div class="stat-bar"><span style="width:92%"></span></div>
+        </div>
+        <div class="stat-card tilt-card">
+          <div class="stat-num" data-target="12000" data-suffix="+">0</div>
+          <div class="stat-label">知识点颗粒</div>
+          <div class="stat-bar"><span style="width:88%"></span></div>
+        </div>
+        <div class="stat-card tilt-card">
+          <div class="stat-num" data-target="4" data-suffix=" 科">0</div>
+          <div class="stat-label">408 全科覆盖</div>
+          <div class="stat-bar"><span style="width:100%"></span></div>
+        </div>
+        <div class="stat-card tilt-card">
+          <div class="stat-num" data-target="365" data-suffix=" 天">0</div>
+          <div class="stat-label">持续学习陪伴</div>
+          <div class="stat-bar"><span style="width:96%"></span></div>
+        </div>
+      </div>
+
+      <!-- 对比表 -->
+      <div class="compare">
+        <h3 class="compare-title">传统备考 <span>vs</span> 408 Pilot</h3>
+        <div class="compare-grid">
+          <div class="compare-row compare-row-head">
+            <span>维度</span><span>传统自学</span><span class="hl">408 Pilot</span>
+          </div>
+          <div class="compare-row">
+            <span>题目讲解</span><span>翻书 / 视频 · 2h 起</span><span class="hl">AI 即时 · 30s 拿到答案与解析</span>
+          </div>
+          <div class="compare-row">
+            <span>错题复盘</span><span>手动抄写 · 凭感觉</span><span class="hl">按错因聚合 · 相似题自动推送</span>
+          </div>
+          <div class="compare-row">
+            <span>学习计划</span><span>经验贴参考 · 难落地</span><span class="hl">结合画像 · 每日补给 · 自动调整</span>
+          </div>
+          <div class="compare-row">
+            <span>知识串联</span><span>章节孤立 · 难关联</span><span class="hl">图谱可视 · 章节 / 考点 / 真题联动</span>
+          </div>
+          <div class="compare-row">
+            <span>答疑响应</span><span>群里 @ 别人 · 凭运气</span><span class="hl">7×24h AI · 真人兜底</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 学员战绩 -->
+  <section class="section">
+    <div class="section-inner">
+      <div class="section-head">
+        <span class="eyebrow eyebrow-hex">// 05 · USER ECHO</span>
+        <h2 class="section-title">真实学员的进步轨迹</h2>
+        <p>过去 12 个月，超过 <b>3,800+</b> 名同学用 408 Pilot 完成了自己的备考路线。</p>
+      </div>
+      <div class="testimonial-grid">
+        <article class="testimonial tilt-card">
+          <div class="t-quote">"</div>
+          <p>第一次感觉到刷题不再痛苦，错题会被自动整理成卡片，第二天再过一遍就记住了。</p>
+          <div class="t-foot">
+            <div class="t-avatar" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">A</div>
+            <div>
+              <div class="t-name">@阿岛</div>
+              <div class="t-meta">二战 · 浙大计科 · 408 124 分</div>
+            </div>
+          </div>
+        </article>
+        <article class="testimonial tilt-card">
+          <div class="t-quote">"</div>
+          <p>知识图谱真的救命，让我一眼看清自己卡在哪一章，再也不会一章一章地盲刷。</p>
+          <div class="t-foot">
+            <div class="t-avatar" style="background:linear-gradient(135deg,#10b981,#06b6d4)">L</div>
+            <div>
+              <div class="t-name">@Lemon</div>
+              <div class="t-meta">一战 · 南软 · 408 131 分</div>
+            </div>
+          </div>
+        </article>
+        <article class="testimonial tilt-card">
+          <div class="t-quote">"</div>
+          <p>最后 60 天每天早上 AI 给我推 5 道题 + 1 个考点，最后 30 天做了 3 套全真模拟。</p>
+          <div class="t-foot">
+            <div class="t-avatar" style="background:linear-gradient(135deg,#f59e0b,#ef4444)">K</div>
+            <div>
+              <div class="t-name">@Kong</div>
+              <div class="t-meta">在职 · 北航软院 · 408 119 分</div>
+            </div>
+          </div>
+        </article>
+        <article class="testimonial tilt-card">
+          <div class="t-quote">"</div>
+          <p>把不会的题直接丢给 AI，它能从知识点层面给我讲清楚，省了我自己翻两个小时书。</p>
+          <div class="t-foot">
+            <div class="t-avatar" style="background:linear-gradient(135deg,#ec4899,#f472b6)">M</div>
+            <div>
+              <div class="t-name">@Mio</div>
+              <div class="t-meta">一战 · 华科计科 · 408 128 分</div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 学习路径 -->
+  <section id="roadmap" class="section section-alt">
+    <div class="section-inner">
+      <div class="section-head">
+        <span class="eyebrow eyebrow-hex">// 06 · LEARNING ROADMAP</span>
+        <h2 class="section-title">从今天到考场的三段路径</h2>
+        <p>无论你是 0 基础还是冲刺阶段，都能找到合适的位置。</p>
+      </div>
+      <div class="roadmap">
+        <div class="road-step tilt-card">
+          <div class="road-mark">01</div>
+          <h3>筑基 · 知识图谱扫盲</h3>
+          <p>用图谱建立 408 整体认知，定位自己处在哪一格。</p>
+          <ul>
+            <li>生成个人掌握度画像</li>
+            <li>勾画四科核心脉络</li>
+            <li>输出首轮薄弱点清单</li>
+          </ul>
+        </div>
+        <div class="road-step tilt-card road-step-hot">
+          <div class="road-mark">02</div>
+          <h3>攻坚 · 真题 + 智能刷题</h3>
+          <p>按图谱推荐刷题，AI 实时讲题、追问、举一反三。</p>
+          <ul>
+            <li>按章节 / 年份 / 难度刷题</li>
+            <li>错题自动入库并标记错因</li>
+            <li>每日补给精准推送</li>
+          </ul>
+        </div>
+        <div class="road-step tilt-card">
+          <div class="road-mark">03</div>
+          <h3>冲刺 · 复盘 + 押题</h3>
+          <p>错题再练、薄弱回炉，AI 帮你把临场状态调到最佳。</p>
+          <ul>
+            <li>错题本按错因聚合复盘</li>
+            <li>全真模拟 + 阅卷级评分</li>
+            <li>冲刺 30 天节奏表</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq" class="section">
+    <div class="section-inner">
+      <div class="section-head">
+        <span class="eyebrow eyebrow-hex">// 07 · FREQUENTLY ASKED</span>
+        <h2 class="section-title">关于 408 Pilot，你可能想知道的</h2>
+        <p>如果还有其它问题，欢迎在 AI 对话舱直接问 AI。</p>
+      </div>
+      <div class="faq-list">
+        <details class="faq-item" open>
+          <summary>
+            <span class="faq-q">408 Pilot 适合什么阶段的人使用？</span>
+            <span class="faq-icon">+</span>
+          </summary>
+          <div class="faq-a">从 0 基础扫盲到考前 30 天冲刺都覆盖。系统会先根据你的目标分数与当前掌握度生成画像，再按阶段推荐刷题 / 复盘 / 模拟。</div>
+        </details>
+        <details class="faq-item">
+          <summary>
+            <span class="faq-q">题库数据从哪里来？是否包含 25 / 26 最新真题？</span>
+            <span class="faq-icon">+</span>
+          </summary>
+          <div class="faq-a">题库来自 2008 - 2026 年统考真题、王道 / 灰灰 / 里昂学长等多套权威资料的结构化整理，AI 引用即得，备考无死角。</div>
+        </details>
+        <details class="faq-item">
+          <summary>
+            <span class="faq-q">AI 答案会不会胡说（幻觉）？</span>
+            <span class="faq-icon">+</span>
+          </summary>
+          <div class="faq-a">我们采用 RAG + 知识图谱的证据先行架构，每条结论都能在真题 / 笔记中找到引用，并会标注证据来源。</div>
+        </details>
+        <details class="faq-item">
+          <summary>
+            <span class="faq-q">是否要付费？</span>
+            <span class="faq-icon">+</span>
+          </summary>
+          <div class="faq-a">新用户可免费注册并使用核心功能；后续可能针对高级模型与全真模拟提供付费档，具体以后续公告为准。</div>
+        </details>
+        <details class="faq-item">
+          <summary>
+            <span class="faq-q">我能用手机刷题吗？</span>
+            <span class="faq-icon">+</span>
+          </summary>
+          <div class="faq-a">支持。登录后学习画像、刷题记录、错题本都会自动同步到多端。</div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- 最终 CTA -->
+  <section class="final-cta">
+    <div class="section-inner final-cta-inner">
+      <div class="final-cta-text">
+        <span class="eyebrow eyebrow-hex">// 08 · READY TO LAUNCH</span>
+        <h2>今天就开始，把 408 学得明明白白</h2>
+        <p>免费注册，立即进入 AI 对话舱；登录后可同步学习画像与刷题记录。</p>
+      </div>
+      <div class="final-cta-actions">
+        <a class="btn btn-cta btn-cta-primary" id="finalChatBtn" href="#authModal" role="button">立即开始 AI 对话</a>
+        <button class="btn btn-cta btn-cta-secondary" id="finalRegisterBtn">注册新账号</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 页脚 -->
+  <footer class="site-footer">
+    <div class="section-inner footer-inner">
+      <div class="footer-brand">
+        <span class="brand-mark">408</span>
+        <div>
+          <div class="brand-name">408 Pilot</div>
+          <div class="brand-tag">考研 AI 学习舱 · 让上岸更确定</div>
+        </div>
+      </div>
+      <div class="footer-cols">
+        <div>
+          <h5>产品</h5>
+          <a href="#features">功能矩阵</a>
+          <a href="#architecture">智能引擎</a>
+          <a href="#stats">数据底座</a>
+        </div>
+        <div>
+          <h5>资源</h5>
+          <a href="/app">进入学习舱</a>
+          <a href="#" id="footerPdfLink">408 笔记库</a>
+        </div>
+        <div>
+          <h5>账号</h5>
+          <a href="#" id="footerLoginLink">登录</a>
+          <a href="#" id="footerRegisterLink">注册</a>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2025 408 Pilot · 仅供学习交流</span>
+      <span class="footer-status"><i></i>所有系统运行正常</span>
+    </div>
+  </footer>
+
+  <!-- 登录/注册 模态框 -->
+  <div class="modal-mask" id="authModal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <button class="modal-close" id="modalClose" aria-label="关闭">×</button>
+      <div class="modal-tabs">
+        <button class="modal-tab active" data-tab="login">登录</button>
+      </div>
+
+      <form class="modal-form active" id="loginForm" data-form="login">
+        <h3>欢迎回来</h3>
+        <p class="modal-sub">登录后同步你的学习画像、刷题记录与错题本。</p>
+        <label>
+          <span>用户名</span>
+          <input type="text" name="username" placeholder="请输入用户名" required autocomplete="username" />
+        </label>
+        <label>
+          <span>密码</span>
+          <input type="password" name="password" placeholder="请输入密码" required autocomplete="current-password" />
+        </label>
+        <div class="form-msg" id="loginMsg"></div>
+        <button class="btn btn-primary btn-block" type="submit">登录</button>
+        <div class="modal-foot">
+          还没有账号？<a href="#" id="loginFootRegister">联系管理员开通</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 全局消息提示 -->
+  <div class="toast" id="toast"></div>
+
+  <script src="/static/home.js?v=20260731-login-fix-1"></script>
+</body>
+</html>

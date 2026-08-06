@@ -1,0 +1,100 @@
+# =============================================================
+# 考研 AI 平台 - 生产编排(阿里云 + PostgreSQL + HTTPS)
+# 适配 Alibaba Cloud Linux 3 + 1.8G 内存
+# =============================================================
+
+services:
+  # ---------- PostgreSQL 14(内存限制 256M) ----------
+  db:
+    image: postgres:14-alpine
+    container_name: kaoyan-ai-db
+    restart: unless-stopped
+    shm_size: '128m'
+    environment:
+      POSTGRES_DB: ${DB_NAME:-kaoyan_ai}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?必须设置 DB_PASSWORD}
+      TZ: Asia/Shanghai
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./db/agent_upgrade.sql:/docker-entrypoint-initdb.d/agent_upgrade.inc:ro
+      - ./db/seed_u1_demo.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-kaoyan_ai}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kaoyan-net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # ---------- FastAPI 主应用(内存限制 1G) ----------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: kaoyan-ai:latest
+    container_name: kaoyan-ai-app
+    restart: unless-stopped
+    expose:
+      - "8000"
+    env_file:
+      - .env
+    environment:
+      TZ: Asia/Shanghai
+      PYTHONUNBUFFERED: 1
+      DB_HOST: db
+      DB_PORT: 5432
+      # 降低 worker 数,1.8G 内存友好
+      WEB_CONCURRENCY: 2
+      GUNICORN_TIMEOUT: 120
+    volumes:
+      - ./data:/app/data
+      - ./cleaned:/app/cleaned:ro
+      - ./logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    networks:
+      - kaoyan-net
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 1024M
+
+  # ---------- Nginx(内存限制 128M) ----------
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: kaoyan-ai-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./logs/nginx:/var/log/nginx
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    depends_on:
+      - app
+    networks:
+      - kaoyan-net
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+networks:
+  kaoyan-net:
+    driver: bridge

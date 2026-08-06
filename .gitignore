@@ -1,0 +1,65 @@
+# Secrets and machine-local configuration
+.env
+.env.*
+!.env.example
+!.env.production.example
+token.txt
+*_payload.json
+*_submit.json
+
+# Python / JavaScript build artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+node_modules/
+test-results/
+playwright-report/
+
+# IDE and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Runtime state and logs
+*.log
+*.pid
+data/agent_memory/
+data/chat_history/
+data/daily_push_cache/
+data/exam_records/
+data/school_selection_cache/
+data/school_selection_runs/
+data/users/
+data/users.*/
+
+# Generated data snapshots and intermediate review files
+data/*.bak*
+data/*.before_*
+data/*_manifest.json
+data/*_progress.json
+data/*_results.jsonl
+data/*_review_queue.jsonl
+data/*_proposals.json
+data/knowledge_points_ocr.jsonl
+data/raw_*.txt
+
+# Large local study sources and temporary exports
+cleaned/
+tiku/
+wangdao/
+tmp/
+data_backup_*/
+xhs_materials/
+
+# Local deployment packages and backups
+deploy/*.tgz
+deploy/backups/
+deploy/_*
+deploy/debug_*
+deploy/peek_*
+deploy/repro_*
+deploy/test_api*
+deploy/verify_*
+deploy/create_*accounts*
+db/seed_*_demo.sql

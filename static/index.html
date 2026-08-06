@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>408 Pilot | 考研 AI 学习舱</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260806-linked-visual-5" />
+  <script src="/static/app-runtime.js?v=20260804-knowledge-visual-2"></script>
+</head>
+<body>
+  <div class="app-container">
+    <nav class="sidebar">
+      <div class="logo">
+        <div class="logo-icon">408</div>
+        <span class="logo-text">408 Pilot</span>
+      </div>
+
+      <div class="nav-menu">
+        <button class="nav-item active" data-view="chat">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+          <span>AI 对话舱</span>
+        </button>
+        <button class="nav-item" data-view="question-bank">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+          <span>题库总览</span>
+        </button>
+        <button class="nav-item" data-view="exam">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zm0 2 4 4h-4zM8 13h8v2H8zm0 4h6v2H8z"/></svg>
+          <span>智能组卷</span>
+        </button>
+        <button class="nav-item" data-view="daily-push">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+          <span>每日补给</span>
+        </button>
+        <button class="nav-item" data-view="study-plan">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z"/></svg>
+          <span>学习计划</span>
+        </button>
+        <button class="nav-item" data-view="school-selection">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 3 1 9l4 2.18v6L12 21l7-3.82v-6L21 10v7h2V9L12 3zm5 12.99-5 2.73-5-2.73v-3.72L12 15l5-2.73v3.72z"/></svg>
+          <span>智能择校</span>
+        </button>
+        <button class="nav-item" data-view="profile">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+          <span>个人中心</span>
+        </button>
+        <button class="nav-item" data-view="knowledge-graph">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          <span>知识图谱</span>
+        </button>
+      </div>
+
+      <div class="sidebar-tools">
+        <button class="nav-item nav-item-pdf" onclick="openPdfModal()">
+          <svg class="nav-icon" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+          <span>408 笔记库</span>
+        </button>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="user-info">
+          <div class="user-avatar">研</div>
+          <div class="user-details">
+            <div class="user-name">考研er</div>
+            <div class="user-status">冲刺学习中</div>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <main class="main-content">
+      <section id="chat-view" class="view active">
+        <div class="chat-container">
+          <!-- 顶部信息条 -->
+          <div class="chat-topbar">
+            <div class="chat-topbar-left">
+              <div class="chat-logo">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
+              </div>
+              <div>
+                <div class="chat-title">考研 AI 学习舱</div>
+                <div class="chat-subtitle">固定 408 口径 · 独立解题 · 验证后输出</div>
+              </div>
+            </div>
+            <div class="chat-topbar-right">
+              <span class="chat-status-dot" title="在线"></span>
+              <button class="chat-new-btn" id="newChatBtn" title="开始新对话">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                新对话
+              </button>
+            </div>
+          </div>
+
+          <!-- 今日状态条 -->
+          <div class="chat-statusbar">
+            <div class="csb-item"><span class="csb-num" id="csbToday">0</span><span class="csb-label">今日已刷</span></div>
+            <div class="csb-sep"></div>
+            <div class="csb-item"><span class="csb-num" id="csbStreak">0</span><span class="csb-label">连续天数</span></div>
+            <div class="csb-sep"></div>
+            <div class="csb-item"><span class="csb-num" id="csbWeak">—</span><span class="csb-label">薄弱科目</span></div>
+            <div class="csb-sep"></div>
+            <div class="csb-item"><span class="csb-num" id="csbPlan">—</span><span class="csb-label">本周计划</span></div>
+          </div>
+
+          <!-- 对话区 -->
+          <div class="chat-messages" id="chatMessages">
+            <!-- 欢迎卡片(空对话时显示) -->
+            <div class="welcome-grid" id="welcomeGrid">
+              <div class="welcome-card" data-text="帮我按备考周期制定完整的 408 学习计划，结合我的题库和知识点安排每日任务。">
+                <div class="wc-icon wc-icon-1">📅</div>
+                <div class="wc-title">冲刺学习计划</div>
+                <div class="wc-desc">按备考周期完整排程，可做题、可打卡</div>
+              </div>
+              <div class="welcome-card" data-text="出一道计算机组成原理选择题。请先独立求解，再逐项核对，并按解题、验证、标准答案的顺序讲解。">
+                <div class="wc-icon wc-icon-2">📝</div>
+                <div class="wc-title">智能刷题</div>
+                <div class="wc-desc">真题+详解+命题思路</div>
+              </div>
+              <div class="welcome-card" data-text="根据我近 30 天的错题,分析我的薄弱环节,给出针对性练习建议。">
+                <div class="wc-icon wc-icon-3">🎯</div>
+                <div class="wc-title">薄弱诊断</div>
+                <div class="wc-desc">错因分析+巩固路径</div>
+              </div>
+              <div class="welcome-card" data-text="用知识图谱串一下「进程同步与互斥」这一章的高频考点。">
+                <div class="wc-icon wc-icon-4">🧠</div>
+                <div class="wc-title">知识点串联</div>
+                <div class="wc-desc">章节考点+逻辑链</div>
+              </div>
+            </div>
+            <!-- 初始 AI 欢迎语 -->
+            <div class="message assistant" data-msg-id="">
+              <div class="message-avatar">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
+              </div>
+              <div class="message-body">
+                <div class="message-meta">
+                  <span class="message-name">考研 AI 助手</span>
+                  <span class="message-time">刚刚</span>
+                </div>
+                <div class="message-content">
+                  <p>你好，我是你的 408 考研 AI 学习助手 ✨</p>
+                  <p>请尽量发送完整题干和选项。我会固定按 <strong>408 考试口径</strong>，依次完成 <strong>独立解题 → 结果验证 → 标准输出</strong>，不会只给答案。</p>
+                </div>
+                <div class="message-actions">
+                  <button class="msg-action-btn" data-action="copy" title="复制">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  </button>
+                  <button class="msg-action-btn" data-action="regen" title="重新生成">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>
+                  </button>
+                  <button class="msg-action-btn" data-action="delete" title="删除">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 输入区 -->
+          <div class="chat-input-area">
+            <div class="quick-actions">
+              <button class="quick-action-btn" data-text="帮我制定一个408冲刺学习计划">
+                <span>🚀</span>冲刺计划
+              </button>
+              <button class="quick-action-btn" data-text="给我出一道数据结构选择题；先独立求解，再逐项核对，最后给出标准答案和易错点">
+                <span>📝</span>智能刷题
+              </button>
+              <button class="quick-action-btn" data-text="帮我分析一下我的薄弱环节">
+                <span>🎯</span>薄弱诊断
+              </button>
+              <button class="quick-action-btn" data-text="用知识图谱串一下操作系统进程同步这一章">
+                <span>🧠</span>考点串联
+              </button>
+            </div>
+            <div class="input-wrapper">
+              <textarea
+                id="messageInput"
+                placeholder="请发送完整题干和选项，例如：先独立求解，再验证并给出标准答案…"
+                rows="1"
+                maxlength="4000"></textarea>
+              <div class="input-toolbar">
+                <span class="char-count" id="charCount">0 / 4000</span>
+                <button class="send-btn" id="sendBtn" title="发送(Enter)">
+                  <svg viewBox="0 0 24 24"><path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z" fill="currentColor"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="input-hint">Enter 发送 · Shift+Enter 换行 · AI 回答可能存在偏差,请结合教材核对</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="question-bank-view" class="view">
+        <div class="dashboard-container">
+          <div class="dash-top-nav">
+            <div class="dash-logo">
+              <span class="dash-logo-icon">408</span>
+              <span class="dash-logo-text">题库作战台</span>
+            </div>
+            <div class="dash-top-copy">用数据把“还差哪里”变得一眼可见。</div>
+          </div>
+
+          <div class="dash-welcome-row">
+            <div class="dash-user-welcome">
+              <svg class="dash-user-icon" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+              <div>
+                <div class="dash-welcome-label">欢迎回来</div>
+                <div class="dash-user-name" id="dashUserName">学习者</div>
+                <div class="dash-welcome-tip" id="dashUserTip">今天继续推进 408</div>
+              </div>
+            </div>
+            <div class="dash-stats-cards">
+              <div class="dash-stat-card">
+                <div class="dash-stat-header">
+                  <span class="dash-stat-title">已完成题量</span>
+                  <svg class="dash-stat-icon" viewBox="0 0 24 24"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                </div>
+                <div class="dash-stat-value" id="dashDoneCount">0</div>
+                <div class="dash-stat-sub">完成度 <span id="dashDonePercent">0</span>%</div>
+              </div>
+              <div class="dash-stat-card dash-stat-card-highlight" id="gotoQuestionBankBtn">
+                <div class="dash-stat-header">
+                  <span class="dash-stat-title">可刷题量</span>
+                  <svg class="dash-stat-icon" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                </div>
+                <div class="dash-stat-value" id="dashTotalCount">0<span class="dash-stat-unit">题</span></div>
+                <div class="dash-stat-sub" id="dashTotalDetail">加载中</div>
+                <a class="dash-stat-link" href="#" onclick="switchToQuestionBankDetail(event)">进入刷题 &gt;</a>
+              </div>
+              <div class="dash-stat-card">
+                <div class="dash-stat-header">
+                  <span class="dash-stat-title">408 通关进度</span>
+                  <svg class="dash-stat-icon" viewBox="0 0 24 24"><path d="M19 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.11 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+                </div>
+                <div class="dash-stat-value" id="dashPassPercent">0<span class="dash-stat-unit">%</span></div>
+                <div class="dash-stat-sub">持续刷新你的掌握曲线</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="dash-second-row">
+            <div class="dash-card dash-calendar-card">
+              <div class="dash-card-title">最近 30 天刷题热力</div>
+              <div class="calendar-stats">
+                <div class="cal-stat-item"><span class="cal-stat-num" id="calDaysDone">0</span><span class="cal-stat-label">刷题天数</span></div>
+                <div class="cal-stat-item"><span class="cal-stat-num" id="calStreak">0</span><span class="cal-stat-label">连续天数</span></div>
+              </div>
+              <div class="calendar-grid" id="calendarGrid"></div>
+              <div class="calendar-legend"><span>目标 <span id="calGoal">5</span> 题/天</span></div>
+            </div>
+
+            <div class="dash-card dash-notice-card">
+              <div class="dash-card-title">今日作战提示</div>
+              <div class="notice-list" id="noticeList">
+                <div class="notice-empty">加载中...</div>
+              </div>
+            </div>
+
+            <div class="dash-card dash-tutor-card">
+              <div class="dash-card-title-row">
+                <span>AI 复盘建议</span>
+                <span class="tutor-more-link">按错因拆解</span>
+              </div>
+              <div class="tutor-list" id="tutorList">
+                <div class="tutor-empty">加载中...</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="dash-subjects-section">
+            <div class="dash-section-header">
+              <span>四科掌握进度</span>
+              <span class="dash-avg-rate">平均掌握率 <strong id="avgMasteryRate">0%</strong></span>
+            </div>
+            <div class="subjects-progress-grid" id="subjectsProgressGrid"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="question-bank-detail-view" class="view">
+        <div class="question-bank-container">
+          <div class="qb-header">
+            <div>
+              <span class="eyebrow">QUESTION BANK</span>
+              <h1 class="qb-title">题库总览</h1>
+              <p class="qb-subtitle" id="questionCount">共 0 道题目</p>
+            </div>
+            <div class="qb-header-actions">
+              <div class="filter-bar">
+                <select class="filter-select" id="subjectFilter">
+                  <option value="all">全部科目</option>
+                  <option value="数据结构">数据结构</option>
+                  <option value="计算机组成原理">计算机组成原理</option>
+                  <option value="操作系统">操作系统</option>
+                  <option value="计算机网络">计算机网络</option>
+                </select>
+                <select class="filter-select" id="yearFilter"><option value="all">全部年份</option></select>
+                <select class="filter-select" id="statusFilter">
+                  <option value="all">全部状态</option>
+                  <option value="unanswered">未做</option>
+                  <option value="correct">做对</option>
+                  <option value="wrong">做错</option>
+                </select>
+              </div>
+              <button class="favorite-filter-btn" id="favoriteFilterBtn" title="查看收藏的题目">
+                <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                <span id="favoriteFilterText">查看收藏</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="question-grid-container">
+            <div class="subject-tabs">
+              <button class="subject-tab active" data-subject="数据结构">数据结构</button>
+              <button class="subject-tab" data-subject="计算机组成原理">计算机组成原理</button>
+              <button class="subject-tab" data-subject="操作系统">操作系统</button>
+              <button class="subject-tab" data-subject="计算机网络">计算机网络</button>
+            </div>
+            <div id="questionGrid" class="question-grid"></div>
+            <div class="question-pagination" id="questionPagination" aria-label="题库分页">
+              <button type="button" id="questionPrevPage">上一页</button>
+              <span id="questionPageInfo">第 1 页</span>
+              <button type="button" id="questionNextPage">下一页</button>
+            </div>
+          </div>
+
+          <div id="questionModal" class="modal hidden">
+            <div class="modal-overlay" id="modalOverlay"></div>
+            <div class="modal-content">
+              <div class="modal-header">
+                <div class="question-meta">
+                  <span class="meta-badge subject" id="modalSubject">数据结构</span>
+                  <span class="meta-badge type" id="modalType">选择题</span>
+                  <span class="meta-badge year" id="modalYear">2023年</span>
+                </div>
+                <div class="modal-header-actions" aria-label="题目操作">
+                  <button class="favorite-btn" id="favoriteBtn" title="收藏此题" aria-label="收藏此题"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg><span class="favorite-label">收藏</span></button>
+                  <button class="note-open-btn" id="openNoteBtn" title="打开本题笔记" aria-label="打开本题笔记">📝<span>笔记</span></button>
+                  <span class="modal-action-divider" aria-hidden="true"></span>
+                  <button class="close-btn" id="closeModal" title="关闭" aria-label="关闭题目"><svg viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg></button>
+                </div>
+              </div>
+              <div class="modal-body">
+                <div class="question-text" id="modalQuestion"></div>
+                <div class="question-options" id="modalOptions"></div>
+                <div class="qa-split-layout hidden" id="qaSplitLayout">
+                  <div class="qa-left-panel">
+                    <div class="answer-section" id="answerSection">
+                      <div class="answer-tab-bar">
+                        <button class="answer-tab active" data-tab="answer">参考答案</button>
+                        <button class="answer-tab" data-tab="explanation">题目解析</button>
+                        <button class="answer-tab question-visualization-tab hidden" id="questionVisualizationTab" data-tab="visualization" title="仅在题干与解析适合过程演示时提供">可视化讲解</button>
+                      </div>
+                      <div class="answer-content markdown-body" id="answerContent"></div>
+                    </div>
+                  </div>
+                  <div class="qa-right-panel">
+                    <div class="qa-chat-container">
+                      <div class="qa-chat-header"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>向 AI 追问</div>
+                      <div class="qa-chat-messages" id="qaChatMessages"><div class="qa-chat-placeholder">针对当前题目追问，例如“请用定义重新验证第 3 步，并说明 B 选项错在哪里”</div></div>
+                      <div class="qa-chat-input-area"><input type="text" id="qaChatInput" placeholder="输入你的问题..."><button class="qa-chat-send" id="qaChatSend">发送</button></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <aside class="question-note-panel" id="questionNotePanel" aria-label="题目笔记" aria-hidden="true">
+                <div class="note-panel-header">
+                  <div>
+                    <strong>本题笔记</strong>
+                    <span id="noteSaveStatus">与当前题目绑定</span>
+                  </div>
+                  <div class="note-header-actions">
+                    <button type="button" id="noteFullscreenBtn" title="全屏记录">⛶ 全屏</button>
+                    <button type="button" id="closeNoteBtn" title="收起笔记">×</button>
+                  </div>
+                </div>
+                <div class="note-mode-tabs" role="tablist">
+                  <button type="button" class="note-mode-tab active" data-note-mode="type" role="tab">键盘输入</button>
+                  <button type="button" class="note-mode-tab" data-note-mode="draw" role="tab">手写笔记</button>
+                </div>
+                <div class="note-mode-panel" data-note-panel="type">
+                  <textarea id="questionNoteText" maxlength="20000" placeholder="记录解题思路、易错点、公式或复盘结论…"></textarea>
+                </div>
+                <div class="note-mode-panel hidden" data-note-panel="draw">
+                  <div class="note-draw-toolbar">
+                    <button type="button" class="active" id="notePenBtn">画笔</button>
+                    <button type="button" id="noteEraserBtn">橡皮</button>
+                    <label class="note-size-control" for="notePenSize">
+                      <span>画笔粗细</span>
+                      <input id="notePenSize" type="range" min="2" max="24" value="4">
+                      <output id="notePenSizeValue" for="notePenSize">4</output>
+                    </label>
+                    <label class="note-size-control" for="noteEraserSize">
+                      <span>橡皮粗细</span>
+                      <input id="noteEraserSize" type="range" min="6" max="48" value="18">
+                      <output id="noteEraserSizeValue" for="noteEraserSize">18</output>
+                    </label>
+                    <input id="noteColor" type="color" value="#172554" title="画笔颜色">
+                    <button type="button" id="noteUndoBtn">撤销</button>
+                    <button type="button" id="noteClearDrawingBtn">清空画布</button>
+                  </div>
+                  <div class="note-canvas-wrap">
+                    <canvas id="questionNoteCanvas" aria-label="手写笔记画布"></canvas>
+                    <span class="note-canvas-hint">支持鼠标、触控笔和手指书写</span>
+                  </div>
+                </div>
+                <div class="note-panel-footer">
+                  <button type="button" class="note-delete-btn" id="deleteNoteBtn">擦除全部笔记</button>
+                  <button type="button" class="primary-btn" id="saveNoteBtn">保存笔记</button>
+                </div>
+              </aside>
+              <div class="modal-footer">
+                <div class="mastery-selector">
+                  <span class="mastery-label">掌握程度：</span>
+                  <button class="mastery-btn" data-mastery="mastered"><svg viewBox="0 0 24 24"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>掌握</button>
+                  <button class="mastery-btn" data-mastery="unsure"><svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>不熟</button>
+                  <button class="mastery-btn" data-mastery="failed"><svg viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>不会</button>
+                </div>
+                <div class="modal-question-actions">
+                  <button class="primary-btn" id="showAnswerBtn">查看答案</button>
+                  <button class="next-question-btn" id="nextQuestionBtn" type="button">下一题 <span aria-hidden="true">→</span></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="exam-view" class="view">
+        <div class="view-container exam-container">
+          <div class="view-header exam-header">
+            <span class="eyebrow">BALANCED MOCK EXAM</span>
+            <h1 class="view-title">智能组卷</h1>
+            <p class="view-subtitle">四科均衡抽题，试卷作答独立保存，不计入题库练习记录。</p>
+          </div>
+          <div id="examContent" class="exam-content">
+            <div class="loading">正在加载试卷档案...</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="daily-push-view" class="view">
+        <div class="view-container">
+          <div class="view-header">
+            <span class="eyebrow">DAILY BOOST</span>
+            <h1 class="view-title">每日补给</h1>
+            <p class="view-subtitle">每天只推进一点，但每一点都要有效。</p>
+          </div>
+          <div id="dailyContent" class="content-card"><div class="loading">正在生成今日训练...</div></div>
+        </div>
+      </section>
+
+      <section id="study-plan-view" class="view">
+        <div class="view-container">
+          <div class="view-header">
+            <span class="eyebrow">STUDY PLAN</span>
+            <h1 class="view-title">学习计划</h1>
+            <p class="view-subtitle">把目标拆成今天能执行的任务。</p>
+          </div>
+          <div id="studyPlanContent" class="content-card">
+            <div class="loading">正在加载学习计划...</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="school-selection-view" class="view" data-controller-url="/static/views/school-selection.js?v=dev">
+        <div class="view-container school-selection-container">
+          <div class="view-header school-selection-header">
+            <span class="eyebrow">SCHOOL INTELLIGENCE</span>
+            <h1 class="view-title">智能择校</h1>
+            <p class="view-subtitle">把历年分数、官方招生信息、机构观点与公开网络关注度放在同一张判断表里。</p>
+          </div>
+
+          <div class="school-selection-layout">
+            <form id="schoolSelectionForm" class="content-card school-selection-form">
+              <div class="school-form-heading">
+                <div>
+                  <span class="school-form-kicker">目标档案</span>
+                  <h2>建立院校分析坐标</h2>
+                </div>
+                <span class="school-live-badge"><i></i> 联网检索</span>
+              </div>
+
+              <div id="schoolLearningSnapshot" class="school-learning-snapshot is-loading">
+                <span>个人学习画像</span>
+                <strong>正在同步做题进度…</strong>
+                <small>系统会自动读取题库覆盖率、正确率和四科表现。</small>
+              </div>
+
+              <label class="school-field">
+                <span>目标院校</span>
+                <input id="schoolNameInput" type="text" maxlength="40" placeholder="例如：浙江大学" required>
+              </label>
+              <label class="school-field">
+                <span>目标专业</span>
+                <input id="schoolMajorInput" type="text" maxlength="60" value="计算机科学与技术" required>
+              </label>
+              <label class="school-field">
+                <span>补充历年分数（可选）</span>
+                <textarea id="schoolScoresInput" rows="3" placeholder="每项用逗号分隔，例如：2024:350, 2025:355, 2026:362"></textarea>
+                <small>系统会优先联网查找；仅当你有更可靠的数据时用于补充或纠正。</small>
+              </label>
+              <label class="school-field">
+                <span>你的目标分数（可选）</span>
+                <input id="schoolTargetScoreInput" type="number" min="100" max="500" placeholder="例如：370">
+              </label>
+
+              <button id="schoolAnalyzeBtn" class="school-analyze-btn" type="submit">
+                <span>开始综合分析</span>
+                <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+              </button>
+              <p class="school-method-note">网络关注度是公开网页代理指标，不等同于真实报考人数或百度指数。</p>
+            </form>
+
+            <div id="schoolSelectionResult" class="school-selection-result" aria-live="polite">
+              <div class="school-empty-state">
+                <div class="school-empty-orbit"><span>择</span></div>
+                <h2>先建立你的目标坐标</h2>
+                <p>分析会自动结合你的做题进度与正确率，并优先检索院校官网、研招网和公开趋势信息。</p>
+                <div class="school-source-legend">
+                  <span><i class="official"></i>官方</span>
+                  <span><i class="institution"></i>机构</span>
+                  <span><i class="community"></i>讨论</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="profile-view" class="view">
+        <div class="profile-container">
+          <div class="view-header">
+            <span class="eyebrow">PROFILE</span>
+            <h1 class="view-title">个人中心</h1>
+            <p class="view-subtitle">查看正确率、薄弱点和错题沉淀。</p>
+          </div>
+          <div id="profileContent" class="profile-content"><div class="loading">正在加载学习画像...</div></div>
+        </div>
+      </section>
+
+      <section id="knowledge-graph-view" class="view">
+        <div class="knowledge-graph-container">
+          <div class="kg-header">
+            <h1 class="kg-title">知识图谱 · KNOWLEDGE UNIVERSE</h1>
+            <div class="kg-controls">
+              <select class="filter-select" id="kgSubjectFilter">
+                <option value="all">全部科目</option>
+                <option value="数据结构">数据结构</option>
+                <option value="计算机组成原理">计算机组成原理</option>
+                <option value="操作系统">操作系统</option>
+                <option value="计算机网络">计算机网络</option>
+              </select>
+              <div class="kg-search"><input type="text" id="kgSearchInput" placeholder="搜索知识点或章节（自动展开跨科关系）"></div>
+            </div>
+          </div>
+          <div class="kg-main">
+            <div id="kgGraphContainer" class="kg-graph">
+              <div class="kg-particles" id="kgParticles"></div>
+              <div class="kg-loading">正在连接知识图谱...</div>
+            </div>
+            <div class="kg-view-hint" id="kgViewHint">概览模式 · 点击章节查看知识点</div>
+            <div class="kg-toolbar" id="kgToolbar">
+              <button class="kg-tool-btn" id="kgZoomIn" title="放大">+</button>
+              <button class="kg-tool-btn" id="kgZoomOut" title="缩小">−</button>
+              <button class="kg-tool-btn" id="kgZoomReset" title="恢复整齐布局">⌂</button>
+            </div>
+            <div class="kg-sidebar">
+              <div class="kg-stat-card"><span class="kg-stat-label">科目数</span><span class="kg-stat-value" id="kgStatSubjects">0</span></div>
+              <div class="kg-stat-card"><span class="kg-stat-label">章节数</span><span class="kg-stat-value" id="kgStatChapters">0</span></div>
+              <div class="kg-stat-card"><span class="kg-stat-label">知识点数</span><span class="kg-stat-value" id="kgStatPoints">0</span></div>
+              <div class="kg-catalog">
+                <h3 class="filter-title">知识目录</h3>
+                <button class="kg-catalog-overview" id="kgCatalogOverview" type="button">图谱总览</button>
+                <div class="kg-catalog-list" id="kgCatalogList"></div>
+              </div>
+              <div class="kg-legend">
+                <h3 class="legend-title">图例</h3>
+                <div class="legend-item"><span class="legend-color" style="background: radial-gradient(circle, #a5b4fc 0%, #6366f1 100%); box-shadow: 0 0 8px #6366f1;"></span> 科目节点</div>
+                <div class="legend-item"><span class="legend-color" style="background: radial-gradient(circle, #6ee7b7 0%, #10b981 100%); box-shadow: 0 0 8px #10b981;"></span> 章节节点</div>
+                <div class="legend-item"><span class="legend-color" style="width:9px;height:9px;background:#e2e8f0;box-shadow:0 0 7px #67e8f9;"></span> 知识点节点</div>
+                <div class="legend-item"><svg width="34" height="10" style="flex-shrink:0;"><line x1="2" y1="5" x2="32" y2="5" stroke="#67e8f9" stroke-width="1.5" stroke-dasharray="4 4"/></svg> 数据流连接</div>
+                <div class="legend-item"><svg width="34" height="10" style="flex-shrink:0;"><line x1="2" y1="5" x2="32" y2="5" stroke="#f59e0b" stroke-width="2.5" stroke-dasharray="7 5"/></svg> 跨科同构关系</div>
+              </div>
+              <div class="kg-subject-filter">
+                <h3 class="filter-title">科目显示</h3>
+                <div class="subject-checkbox"><input type="checkbox" id="subject-ds" checked><label for="subject-ds"><span class="subject-color-dot" style="background:#6366f1;color:#6366f1;"></span>数据结构</label></div>
+                <div class="subject-checkbox"><input type="checkbox" id="subject-co" checked><label for="subject-co"><span class="subject-color-dot" style="background:#10b981;color:#10b981;"></span>计算机组成原理</label></div>
+                <div class="subject-checkbox"><input type="checkbox" id="subject-os" checked><label for="subject-os"><span class="subject-color-dot" style="background:#f59e0b;color:#f59e0b;"></span>操作系统</label></div>
+                <div class="subject-checkbox"><input type="checkbox" id="subject-cn" checked><label for="subject-cn"><span class="subject-color-dot" style="background:#ef4444;color:#ef4444;"></span>计算机网络</label></div>
+              </div>
+              <div class="kg-detail-panel" id="kgDetailPanel">
+                <h3 class="detail-title">操作提示</h3>
+                <div class="detail-content">
+                  默认展示“科目 → 章节”概览。搜索具体考点时会同时展开跨科同构节点与橙色虚线关系；点击知识点可查看共享机制。拖动节点后点击“⌂”可恢复默认布局。
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="chapter-detail-view" class="view">
+        <div class="chapter-detail-container">
+          <div class="chapter-detail-header">
+            <button class="back-btn" id="chapterBackBtn">← 返回知识图谱</button>
+            <div class="chapter-detail-title">
+              <h1 id="chapterDetailTitle">章节标题</h1>
+              <p id="chapterDetailMeta" class="chapter-meta"></p>
+            </div>
+          </div>
+          <div id="chapterDetailContent" class="chapter-detail-content"><div class="kg-loading">章节知识点加载中...</div></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/app.js?v=20260806-linked-visual-6"></script>
+
+  <div class="knowledge-visual-modal hidden" id="knowledgeVisualModal" role="dialog" aria-modal="true" aria-labelledby="knowledgeVisualTitle">
+    <div class="knowledge-visual-backdrop" data-knowledge-visual-close></div>
+    <div class="knowledge-visual-dialog">
+      <header class="knowledge-visual-header">
+        <div><span id="knowledgeVisualMeta">知识点可视化</span><h2 id="knowledgeVisualTitle">可视化学习舱</h2></div>
+        <button type="button" class="knowledge-visual-close" data-knowledge-visual-close aria-label="关闭">×</button>
+      </header>
+      <nav class="knowledge-visual-tabs" aria-label="知识点学习模式">
+        <button type="button" class="active" data-knowledge-visual-tab="structure">概念推理</button>
+        <button type="button" data-knowledge-visual-tab="process">逐步推演</button>
+        <button type="button" data-knowledge-visual-tab="simulator">预测实验</button>
+        <button type="button" data-knowledge-visual-tab="personal">关联题目检验</button>
+      </nav>
+      <div class="knowledge-visual-body" id="knowledgeVisualBody"><div class="knowledge-visual-loading">正在建立知识结构…</div></div>
+    </div>
+  </div>
+
+  <div id="pdfModal" class="pdf-modal" onclick="if(event.target===this)closePdfModal()">
+    <div class="pdf-modal-content">
+      <div class="pdf-modal-header">
+        <div>
+          <span class="eyebrow">PDF VAULT</span>
+          <h2>408 高频资料库</h2>
+        </div>
+        <button onclick="closePdfModal()" class="pdf-close-btn" title="关闭">×</button>
+      </div>
+      <ul class="pdf-list">
+        <li><a href="/notes/ds" target="_blank"><span>DS</span><div><b>数据结构笔记</b><small>章节梳理与高频知识点</small></div><strong>打开</strong></a></li>
+        <li><a href="/notes/os" target="_blank"><span>OS</span><div><b>操作系统笔记</b><small>进程、内存、文件与 I/O</small></div><strong>打开</strong></a></li>
+        <li><a href="/notes/co" target="_blank"><span>CO</span><div><b>计算机组成原理笔记</b><small>数据表示、CPU、存储系统</small></div><strong>打开</strong></a></li>
+        <li><a href="/notes/cn" target="_blank"><span>CN</span><div><b>计算机网络笔记</b><small>分层模型、协议与计算题</small></div><strong>打开</strong></a></li>
+      </ul>
+      <a class="pdf-all-link" href="/cleaned/" target="_blank">查看全部资料</a>
+    </div>
+  </div>
+
+  <script>
+    function openPdfModal() {
+      document.getElementById('pdfModal').classList.add('active');
+    }
+    function closePdfModal() {
+      document.getElementById('pdfModal').classList.remove('active');
+    }
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closePdfModal();
+    });
+  </script>
+</body>
+</html>

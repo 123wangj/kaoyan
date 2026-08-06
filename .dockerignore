@@ -1,0 +1,97 @@
+# =============================================================
+# Docker 忽略文件 - 减小镜像体积,避免泄露敏感信息
+# =============================================================
+
+# Git / IDE
+.git
+.gitignore
+.idea
+.vscode
+*.iml
+.DS_Store
+
+# Python 缓存
+__pycache__
+**/__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv
+env/
+ENV/
+
+# 测试与缓存
+.pytest_cache
+.coverage
+htmlcov/
+.tox
+.mypy_cache
+.ruff_cache
+.cache
+node_modules/
+test-results/
+playwright-report/
+
+# 文档(非运行必需)
+README.md
+SKILL.md
+*.md
+
+# 敏感配置(通过 env 注入)
+.env
+.env.*
+!.env.example
+!.env.production.example
+token.txt
+*_payload.json
+alice_submit.json
+login_payload.json
+register_payload.json
+
+# 本地运行日志
+*.log
+*.err.log
+logs/
+
+# 体积大的非必要内容
+tiku/
+wangdao/
+cleaned/
+data/users/
+data/users.before_system_repair/
+data/chat_history/
+data/knowledge_points_ocr.jsonl
+data/knowledge_points_full.jsonl
+data/*.bak
+data/*.bak3
+data/*.bak4
+data_backup_*/
+scripts/*
+!scripts/import_to_postgres.py
+__pycache__/
+tests/
+
+# 调试脚本
+_*debug*.py
+_*test*.py
+_*check*.py
+_*analyze*.py
+_*merge*.py
+_*rebuild*.py
+_*restore*.py
+_*final*.py
+_*fix*.py
+_*ocr*.py
+_*pdf*.py
+_*cn_analysis.txt
+_*pdf_analysis*.txt
+test_*.png
+test_*.jpg
+
+# Docker 自身
+Dockerfile
+.dockerignore
+docker-compose*.yml
+nginx.conf

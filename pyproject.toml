@@ -1,0 +1,41 @@
+[project]
+name = "kaoyan-cs-ai"
+version = "0.1.0"
+description = "Computer science graduate entrance exam AI tutor built with LangGraph, LangChain, MCP, Skills and RAG."
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "gunicorn>=22.0.0",
+  "python-multipart>=0.0.9",
+  "pydantic>=2.7.0",
+  "pydantic-settings>=2.3.0",
+  "openai>=1.50.0",
+  "langchain>=0.2.0",
+  "langchain-openai>=0.1.0",
+  "langchain-community>=0.2.0",
+  "langgraph>=0.2.0",
+  "chromadb>=0.5.0",
+  "scikit-learn>=1.4.0",
+  "matplotlib>=3.8.0",
+  "duckduckgo-search>=6.0.0",
+  "ddgs>=9.5.0",
+  "mcp>=1.0.0",
+  "psycopg2-binary>=2.9.9",
+  "bcrypt>=4.1.0",
+  "PyJWT>=2.8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+  "ruff>=0.5.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

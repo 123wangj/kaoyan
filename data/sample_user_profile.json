@@ -1,0 +1,82 @@
+{
+  "user_id": "u1",
+  "target_school": "示例大学",
+  "target_major": "计算机技术",
+  "exam_date": "2026-12-20",
+  "chat_summary": "近期频繁询问操作系统虚拟存储和计算机网络 TCP。",
+  "wrong_questions": [
+    {
+      "question_id": "os-memory-001",
+      "subject": "操作系统",
+      "knowledge_points": [
+        "页表",
+        "快表"
+      ],
+      "error_reason": "概念不清",
+      "created_at": "2026-05-20"
+    }
+  ],
+  "answer_records": [
+    {
+      "question_id": "os-memory-001",
+      "subject": "操作系统",
+      "knowledge_points": [
+        "页表",
+        "快表"
+      ],
+      "is_correct": false,
+      "spent_seconds": 180,
+      "created_at": "2026-05-20"
+    },
+    {
+      "question_id": "cn-tcp-001",
+      "subject": "计算机网络",
+      "knowledge_points": [
+        "TCP",
+        "三次握手"
+      ],
+      "is_correct": true,
+      "spent_seconds": 90,
+      "created_at": "2026-05-21"
+    }
+  ],
+  "pushed_knowledge_ids": [
+    "kp-9473110ac587",
+    "kp-c2704b9289fe",
+    "kp-cn-sliding-window",
+    "kp-ab2a198e7833",
+    "kp-a544d1a31ded"
+  ],
+  "pushed_question_ids": [
+    "push-q-79db104a4848",
+    "push-q-387fc82809b8",
+    "push-q-3b5d2181a62b",
+    "push-q-445648439886",
+    "push-q-1e035898cc24",
+    "push-q-295b81efdb1a",
+    "push-q-2dc87720ad0b",
+    "push-q-49f1e5721967",
+    "push-q-c789f1fa8f7d",
+    "push-q-68f9d99bd79a",
+    "push-q-25c3c8b0c6aa",
+    "push-q-a5b7ec7470cc",
+    "push-q-9b2de1b74c5f",
+    "push-q-d1302268afbf",
+    "push-q-89121c56bee4",
+    "push-q-32605e570c0e",
+    "push-q-ca3e84b3c360",
+    "push-q-226bacb66b8f",
+    "push-q-019b6a903d4f",
+    "push-q-3b01cf178b38",
+    "push-q-a78ef4755b08",
+    "push-q-d91984d57901",
+    "push-q-09c0f08f3bca",
+    "push-q-b6c5383ae1e8",
+    "push-q-66abd668a647",
+    "push-q-72e216ae84b4",
+    "push-q-e1f18103c035",
+    "push-q-8d39ed4a8749",
+    "push-q-770148c85dd7",
+    "push-q-e90197df5d9c"
+  ]
+}

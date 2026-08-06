@@ -1,0 +1,128 @@
+[
+  {
+    "id": "yan-dao-408",
+    "name": "研岛 408 考研题库",
+    "url": "https://www.408dao.com/",
+    "type": "在线题库",
+    "subjects": ["数据结构", "计算机组成原理", "操作系统", "计算机网络"],
+    "summary": "专注计算机考研的在线刷题平台，包含题库练习、真题模考、精选题单等入口。",
+    "usage_tip": "适合接入为外部刷题入口或让学生按章节进行日常训练。"
+  },
+  {
+    "id": "shangan-408",
+    "name": "408 考研刷题",
+    "url": "https://shangan408.online/",
+    "type": "历年真题",
+    "subjects": ["数据结构", "计算机组成原理", "操作系统", "计算机网络"],
+    "summary": "按 2009-2026 年份和四门科目组织 408 真题，页面标注各科题量。",
+    "usage_tip": "适合作为真题练习入口，前端可按年份或科目跳转。"
+  },
+  {
+    "id": "gitgraduate-question-bank",
+    "name": "研码 408 考研智能刷题平台",
+    "url": "https://gitgraduate.com/question-bank",
+    "type": "在线题库",
+    "subjects": ["数据结构", "计算机组成原理", "操作系统", "计算机网络"],
+    "summary": "提供 408 题库、知识导航、薄弱点定位和错题本等刷题功能。",
+    "usage_tip": "适合参考其题库筛选、错题本和知识导航交互。"
+  },
+  {
+    "id": "suhan42-cs-408",
+    "name": "suhan42/cs-408",
+    "url": "https://github.com/suhan42/cs-408",
+    "type": "GitHub 资料库",
+    "subjects": ["数据结构", "计算机组成原理", "操作系统", "计算机网络"],
+    "summary": "包含 408 复习经验、笔记、资源和真题目录，按科目组织。",
+    "usage_tip": "适合人工整理后导入本项目 RAG 知识库。"
+  },
+  {
+    "id": "songmuhan-408",
+    "name": "songmuhan/408",
+    "url": "https://github.com/songmuhan/408",
+    "type": "GitHub 真题",
+    "subjects": ["408 真题"],
+    "summary": "计算机考研 408 真题与答案资料库。",
+    "usage_tip": "适合补充历年真题索引，但导入前需要核对版权和答案准确性。"
+  },
+  {
+    "id": "codepanda66-cspostgraduate-408",
+    "name": "CodePanda66/CSPostgraduate-408",
+    "url": "https://github.com/CodePanda66/CSPostgraduate-408",
+    "type": "GitHub 笔记",
+    "subjects": ["数据结构", "计算机组成原理", "操作系统", "计算机网络"],
+    "summary": "包含 408 真题资料、笔记、思维导图、算法源码和课程 PPT 索引。",
+    "usage_tip": "适合抽取知识点、思维导图目录和复习材料索引。"
+  },
+  {
+    "id": "uwh-408-syllabus",
+    "name": "408 计算机学科专业基础考试大纲",
+    "url": "https://www.uwh.edu.cn/jkxy/detail/882/11591.html",
+    "type": "考试大纲",
+    "subjects": ["408 考纲"],
+    "summary": "公开页面整理 408 计算机学科专业基础考试大纲。",
+    "usage_tip": "适合用于校验题目解答和知识点推送是否超出 408 范围。"
+  },
+  {
+    "id": "csgraduates-408quiz",
+    "name": "计算机考研杂货铺 408 历年真题",
+    "url": "https://www.csgraduates.com/study_methods/408quiz/",
+    "type": "真题索引",
+    "subjects": ["408 真题"],
+    "summary": "整理 2009-2026 年 408 历年真题，含完整题干、选项和答案解析。本次数据采集的主要来源。",
+    "usage_tip": "适合前端作为真题资料导航入口，也是真题数据采集的首选来源。"
+  },
+  {
+    "id": "noobdream-408",
+    "name": "N诺考研 408 真题",
+    "url": "https://noobdream.com/Practice/exam_solution/40548/",
+    "type": "真题解析",
+    "subjects": ["数据结构", "计算机组成原理", "操作系统", "计算机网络"],
+    "summary": "提供 408 历年真题的在线做题和答案解析，支持按年份切换。",
+    "usage_tip": "适合作为真题答案验证和解析补充的第二来源。"
+  },
+  {
+    "id": "ddy-ddy-cs408",
+    "name": "ddy-ddy/cs-408",
+    "url": "https://github.com/ddy-ddy/cs-408",
+    "type": "GitHub 知识库",
+    "subjects": ["数据结构", "计算机组成原理", "操作系统", "计算机网络"],
+    "summary": "408 考研知识库，含高频考点、易错点和复习方法整理。",
+    "usage_tip": "适合导入高频考点和易错点数据到 wangdao_knowledge.json。"
+  },
+  {
+    "id": "alice-and-bob-cs408",
+    "name": "Alice-and-Bob/CS408",
+    "url": "https://github.com/Alice-and-Bob/CS408",
+    "type": "GitHub 笔记",
+    "subjects": ["数据结构", "计算机组成原理", "操作系统", "计算机网络"],
+    "summary": "408 考研完整复习笔记，含知识点总结和真题分析。",
+    "usage_tip": "适合抽取知识点详解和真题分析到 RAG 知识库。"
+  },
+  {
+    "id": "zhihu-408-review",
+    "name": "知乎 408 考研经验合集",
+    "url": "https://zhuanlan.zhihu.com/p/10872907874",
+    "type": "经验分享",
+    "subjects": ["408 综合"],
+    "summary": "如何高效准备2027年计算机考研？含详细复习规划和方法建议。",
+    "usage_tip": "适合为学习计划生成模块提供参考。"
+  },
+  {
+    "id": "zhihu-408-syllabus-2025",
+    "name": "408考试大纲和变动分析",
+    "url": "https://zhuanlan.zhihu.com/p/29581993134",
+    "type": "考试大纲",
+    "subjects": ["408 考纲"],
+    "summary": "2025年计算机考研408专业课考试大纲和变动分析（完整版），含各科目分值比例。",
+    "usage_tip": "适合用于考纲范围校验和分值权重参考。"
+  },
+  {
+    "id": "codefather-408-review",
+    "name": "408 复习路径（非科班必看）",
+    "url": "https://www.codefather.cn/post/1831923702136107009",
+    "type": "复习指导",
+    "subjects": ["408 综合"],
+    "summary": "编程导航的408复习方法指导，含王道网课使用建议和复习顺序。",
+    "usage_tip": "适合为非科班学生生成个性化复习路径。"
+  }
+]

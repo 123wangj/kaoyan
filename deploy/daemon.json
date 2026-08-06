@@ -1,0 +1,9 @@
+{
+  "registry-mirrors": [
+    "https://mirror.ccs.aliyun.com",
+    "https://docker.m.daocloud.io",
+    "https://dockerproxy.com"
+  ],
+  "log-driver": "json-file",
+  "log-opts": {"max-size": "50m", "max-file": "3"}
+}
