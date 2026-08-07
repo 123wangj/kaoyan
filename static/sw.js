@@ -1,6 +1,6 @@
-const CACHE_NAME = 'kaoyan-shell-20260804-knowledge-visual-2';
+const CACHE_NAME = 'kaoyan-shell-20260807-tablet-landscape-1';
 const SHELL = [
-  '/static/styles.css?v=20260804-knowledge-visual-2',
+  '/static/styles.css?v=20260807-tablet-landscape-1',
   '/static/app-runtime.js?v=20260804-knowledge-visual-2',
   '/static/app.js?v=20260804-knowledge-visual-2',
   '/static/views/school-selection.js?v=dev',

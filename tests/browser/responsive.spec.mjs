@@ -38,6 +38,10 @@ test.beforeEach(async ({ page }) => {
     path: 'static/app-runtime.js',
     contentType: 'application/javascript'
   }));
+  await page.route('**/static/styles.css*', route => route.fulfill({
+    path: 'static/styles.css',
+    contentType: 'text/css'
+  }));
   await page.route('**/static/views/school-selection.js*', route => route.fulfill({
     path: 'static/views/school-selection.js',
     contentType: 'application/javascript'
@@ -377,4 +381,78 @@ test('tablet question-bank dashboard uses balanced card rows', async ({ page }, 
       fullPage: false,
     });
   }
+});
+
+test('tablet landscape prioritizes questions and keeps work panels usable', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'tablet');
+  await page.setViewportSize({ width: 1024, height: 768 });
+
+  const listMetrics = await page.evaluate(() => {
+    const header = document.querySelector('#question-bank-detail-view .qb-header')?.getBoundingClientRect();
+    const tabs = document.querySelector('#question-bank-detail-view .subject-tabs')?.getBoundingClientRect();
+    const grid = document.querySelector('#questionGrid')?.getBoundingClientRect();
+    const cards = Array.from(document.querySelectorAll('#questionGrid .question-card')).slice(0, 3)
+      .map(card => card.getBoundingClientRect());
+    return {
+      headerHeight: header?.height || 0,
+      tabsHeight: tabs?.height || 0,
+      gridHeight: grid?.height || 0,
+      firstRowYSpread: Math.max(...cards.map(card => card.y)) - Math.min(...cards.map(card => card.y)),
+    };
+  });
+  expect(listMetrics.headerHeight).toBeLessThanOrEqual(70);
+  expect(listMetrics.tabsHeight).toBeLessThanOrEqual(60);
+  expect(listMetrics.gridHeight).toBeGreaterThan(560);
+  expect(listMetrics.firstRowYSpread).toBeLessThan(3);
+
+  await page.locator('#questionGrid .question-card').nth(0).click();
+  await page.locator('#openNoteBtn').click();
+  const noteMetrics = await page.evaluate(() => {
+    const panel = document.querySelector('#questionNotePanel')?.getBoundingClientRect();
+    const editor = document.querySelector('#questionNoteText')?.getBoundingClientRect();
+    return {
+      panelWidth: panel?.width || 0,
+      panelBottom: panel?.bottom || 0,
+      editorHeight: editor?.height || 0,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+    };
+  });
+  expect(noteMetrics.panelWidth).toBeLessThan(noteMetrics.viewportWidth * .55);
+  expect(noteMetrics.panelBottom).toBeLessThanOrEqual(noteMetrics.viewportHeight);
+  expect(noteMetrics.editorHeight).toBeGreaterThan(360);
+  await page.locator('#closeNoteBtn').click();
+  await page.locator('#closeModal').click();
+
+  await page.evaluate(() => window.switchView('study-plan'));
+  await page.waitForTimeout(100);
+  await page.evaluate(() => {
+    window.renderStudyPlanView({
+      ai_summary: '测试计划',
+      created_at: '2026-08-07',
+      week_count: 1,
+      weekly: [{ week: 1, theme: '基础', tasks: [] }],
+      answers: {},
+    });
+  });
+  await page.locator('#openPlanAiBtn').click();
+  const aiMetrics = await page.evaluate(() => {
+    const panel = document.querySelector('#planAiEditor')?.getBoundingClientRect();
+    const capabilities = document.querySelector('.plan-ai-capabilities')?.getBoundingClientRect();
+    const messages = document.querySelector('.plan-ai-messages')?.getBoundingClientRect();
+    const input = document.querySelector('#planAiInput')?.getBoundingClientRect();
+    return {
+      panelRight: panel?.right || 0,
+      panelBottom: panel?.bottom || 0,
+      capabilitiesRight: capabilities?.right || 0,
+      messagesLeft: messages?.left || 0,
+      inputBottom: input?.bottom || 0,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+    };
+  });
+  expect(aiMetrics.panelRight).toBeLessThanOrEqual(aiMetrics.viewportWidth);
+  expect(aiMetrics.panelBottom).toBeLessThanOrEqual(aiMetrics.viewportHeight);
+  expect(aiMetrics.capabilitiesRight).toBeLessThan(aiMetrics.messagesLeft);
+  expect(aiMetrics.inputBottom).toBeLessThan(aiMetrics.panelBottom);
 });
