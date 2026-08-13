@@ -435,6 +435,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 异步刷 dashboard 周边
   renderDashboardNotice();
   renderDashboardTutors();
+  renderDashboardWrongBook();
 });
 
 let _activityHeatmapPromise = null;
@@ -858,6 +859,94 @@ function subjectCode(subject) {
     '操作系统': 'OS',
     '计算机网络': 'CN',
   })[subject] || (subject ? subject.slice(0, 2) : 'KB');
+}
+
+// 题库作战台 · 错题本(原位于个人中心，现迁移至此)
+async function renderDashboardWrongBook() {
+  const wrap = document.getElementById('dashWrongBook');
+  if (!wrap) return;
+
+  let wrongBookItems = [];
+  try {
+    const resp = await fetch('/wrong-book');
+    if (resp.ok) {
+      const data = await resp.json();
+      wrongBookItems = Array.isArray(data) ? data : (data.wrong_book || data.questions || data.items || []);
+    }
+  } catch (e) {
+    console.warn('错题本加载失败', e);
+  }
+
+  const subjects = ['数据结构', '计算机组成原理', '操作系统', '计算机网络'];
+  const wrongBySubject = {};
+  subjects.forEach(s => wrongBySubject[s] = []);
+  wrongBookItems.forEach(it => {
+    const s = it.subject || '其他';
+    if (!wrongBySubject[s]) wrongBySubject[s] = [];
+    wrongBySubject[s].push(it);
+  });
+  const subjectOptionsHtml = ['<option value="all">全部学科 ( ' + wrongBookItems.length + ' )</option>']
+    .concat(Object.keys(wrongBySubject).filter(s => wrongBySubject[s].length).map(s => `<option value="${s}">${s} ( ${wrongBySubject[s].length} )</option>`))
+    .join('');
+  const renderWrongList = (list) => list.length
+    ? list.slice(0, 8).map(item => `
+      <div class="weak-point-item" style="align-items:flex-start;gap:12px;">
+        <div style="flex:1;min-width:0;">
+          <div class="weak-point-name">${escapeHtml(item.subject || '')} · ${escapeHtml((item.knowledge_points || []).join('、'))}</div>
+          <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">${escapeHtml((item.content || item.question_id || '').slice(0, 120))}${(item.content || '').length > 120 ? '...' : ''}</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">错因：${escapeHtml(item.error_reason || '概念不清')} · 错 ${item.wrong_count || 1} 次 · 复盘 ${item.review_count || 0} 次</div>
+        </div>
+        <button class="wrong-review-btn" data-question-id="${escapeHtml(item.question_id)}" style="border:0;border-radius:8px;padding:7px 10px;background:var(--primary);color:#fff;cursor:pointer;">标记已掌握</button>
+      </div>
+    `).join('')
+    : '<p style="color: var(--text-secondary)">该学科暂无错题。</p>';
+  const wrongBookHtml = wrongBookItems.length
+    ? renderWrongList(wrongBookItems)
+    : '<p style="color: var(--text-secondary)">暂无未解决错题。</p>';
+
+  wrap.innerHTML = `
+    <div class="dash-section-header">
+      <span>📝 错题本</span>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        ${wrongBookItems.length > 0 ? '<button id="startReviewBtn" style="border:0;border-radius:10px;padding:8px 16px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;cursor:pointer;font-weight:600;font-size:13px;">开始错题复习模式 (' + wrongBookItems.length + ' 题待复习)</button>' : ''}
+        <select id="wrongBookSubjectFilter" class="filter-select" style="background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;">${subjectOptionsHtml}</select>
+      </div>
+    </div>
+    <div class="weak-points" id="wrongBookList">
+      ${wrongBookHtml}
+    </div>
+    <div id="reviewSessionArea" style="display:none;"></div>
+  `;
+
+  const bindResolveButtons = (root) => {
+    root.querySelectorAll('.wrong-review-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await fetch('/wrong-book/' + encodeURIComponent(btn.dataset.questionId) + '/review', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ result: 'resolved' })
+        });
+        renderDashboardWrongBook();
+      });
+    });
+  };
+  bindResolveButtons(wrap);
+
+  const startReviewBtn = document.getElementById('startReviewBtn');
+  if (startReviewBtn) {
+    startReviewBtn.addEventListener('click', startWrongBookReview);
+  }
+
+  const wrongFilter = document.getElementById('wrongBookSubjectFilter');
+  const wrongListEl = document.getElementById('wrongBookList');
+  if (wrongFilter && wrongListEl) {
+    wrongFilter.addEventListener('change', () => {
+      const val = wrongFilter.value;
+      const list = val === 'all' ? wrongBookItems : (wrongBySubject[val] || []);
+      wrongListEl.innerHTML = renderWrongList(list);
+      bindResolveButtons(wrongListEl);
+    });
+  }
 }
 
 function renderCalendarGrid() {
@@ -3510,34 +3599,6 @@ function renderProfile(data) {
     `;
   }).join('');
 
-  const wrongBookItems = data.wrong_book || [];
-  // 按学科分组(用于错题本过滤)—— 复用上面声明的 subjects
-  const wrongBySubject = {};
-  subjects.forEach(s => wrongBySubject[s] = []);
-  wrongBookItems.forEach(it => {
-    const s = it.subject || '其他';
-    if (!wrongBySubject[s]) wrongBySubject[s] = [];
-    wrongBySubject[s].push(it);
-  });
-  const subjectOptionsHtml = ['<option value="all">全部学科 ( ' + wrongBookItems.length + ' )</option>']
-    .concat(subjects.filter(s => wrongBySubject[s].length).map(s => `<option value="${s}">${s} ( ${wrongBySubject[s].length} )</option>`))
-    .join('');
-  const renderWrongList = (list) => list.length
-    ? list.slice(0, 8).map(item => `
-      <div class="weak-point-item" style="align-items:flex-start;gap:12px;">
-        <div style="flex:1;min-width:0;">
-          <div class="weak-point-name">${escapeHtml(item.subject || '')} · ${escapeHtml((item.knowledge_points || []).join('、'))}</div>
-          <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">${escapeHtml((item.content || item.question_id || '').slice(0, 120))}${(item.content || '').length > 120 ? '...' : ''}</div>
-          <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">错因：${escapeHtml(item.error_reason || '概念不清')} · 错 ${item.wrong_count || 1} 次 · 复盘 ${item.review_count || 0} 次</div>
-        </div>
-        <button class="wrong-review-btn" data-question-id="${escapeHtml(item.question_id)}" style="border:0;border-radius:8px;padding:7px 10px;background:var(--primary);color:#fff;cursor:pointer;">标记已掌握</button>
-      </div>
-    `).join('')
-    : '<p style="color: var(--text-secondary)">该学科暂无错题。</p>';
-  const wrongBookHtml = wrongBookItems.length
-    ? renderWrongList(wrongBookItems)
-    : '<p style="color: var(--text-secondary)">暂无未解决错题。</p>';
-
   const taskData = data.daily_tasks || { tasks: [] };
   const taskHtml = (taskData.tasks || []).map(task => `
     <div class="weak-point-item">
@@ -3585,18 +3646,6 @@ function renderProfile(data) {
     </div>
 
     <div class="profile-section">
-      <h3 class="profile-section-title">📝 正式错题本</h3>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
-        ${wrongBookItems.length > 0 ? '<button id="startReviewBtn" style="border:0;border-radius:10px;padding:10px 20px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;cursor:pointer;font-weight:600;font-size:14px;">开始错题复习模式 (' + wrongBookItems.length + ' 题待复习)</button>' : ''}
-        <select id="wrongBookSubjectFilter" class="filter-select" style="margin-left:auto;background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;">${subjectOptionsHtml}</select>
-      </div>
-      <div class="weak-points" id="wrongBookList">
-        ${wrongBookHtml}
-      </div>
-      <div id="reviewSessionArea" style="display:none;"></div>
-    </div>
-
-    <div class="profile-section">
       <h3 class="profile-section-title">✅ 今日任务</h3>
       <div class="weak-points">
         ${taskHtml}
@@ -3617,17 +3666,6 @@ function renderProfile(data) {
       </div>
     </div>
   `;
-
-  profileDiv.querySelectorAll('.wrong-review-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      await fetch('/wrong-book/' + encodeURIComponent(btn.dataset.questionId) + '/review', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ result: 'resolved' })
-      });
-      loadProfile();
-    });
-  });
 
   profileDiv.querySelectorAll('.profile-point-link').forEach(button => {
     button.addEventListener('click', () => {
@@ -3655,34 +3693,6 @@ function renderProfile(data) {
       await Promise.all([loadProfile(), loadDailyTasks()]);
     });
   });
-
-  // 错题复习模式按钮
-  const startReviewBtn = document.getElementById('startReviewBtn');
-  if (startReviewBtn) {
-    startReviewBtn.addEventListener('click', startWrongBookReview);
-  }
-
-  // 错题本按学科过滤
-  const wrongFilter = document.getElementById('wrongBookSubjectFilter');
-  const wrongListEl = document.getElementById('wrongBookList');
-  if (wrongFilter && wrongListEl) {
-    wrongFilter.addEventListener('change', () => {
-      const val = wrongFilter.value;
-      const list = val === 'all' ? wrongBookItems : (wrongBySubject[val] || []);
-      wrongListEl.innerHTML = renderWrongList(list);
-      // 重新绑定"标记已掌握"按钮
-      wrongListEl.querySelectorAll('.wrong-review-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          await fetch('/wrong-book/' + encodeURIComponent(btn.dataset.questionId) + '/review', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ result: 'resolved' })
-          });
-          loadProfile();
-        });
-      });
-    });
-  }
 }
 
 // ========== 错题复习模式 ==========

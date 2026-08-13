@@ -1672,7 +1672,9 @@ def user_insights(user_id: str = Query("u1"), user: str = Depends(require_user))
 def get_wrong_book(user_id: str = Query("u1"), status: str = Query("open"), user: str = Depends(require_user)):
     user_id = user
     state = load_learning_state(settings.data_dir, user_id)
-    return wrong_book_items(state, status=status)
+    items = wrong_book_items(state, status=status)
+    # 补全题干 / 知识点 / 学科，使题库作战台的错题本与个人中心显示一致
+    return _hydrate_learning_display({"wrong_book": items})["wrong_book"]
 
 
 @app.post("/wrong-book/{question_id}/review")
