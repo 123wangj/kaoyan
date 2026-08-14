@@ -1077,7 +1077,10 @@ async function renderDashboardWrongBook() {
           <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">${escapeHtml((item.content || item.question_id || '').slice(0, 120))}${(item.content || '').length > 120 ? '...' : ''}</div>
           <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">错因：${escapeHtml(item.error_reason || '概念不清')} · 错 ${item.wrong_count || 1} 次 · 复盘 ${item.review_count || 0} 次</div>
         </div>
-        <button class="wrong-review-btn" data-question-id="${escapeHtml(item.question_id)}" style="border:0;border-radius:8px;padding:7px 10px;background:var(--primary);color:#fff;cursor:pointer;">标记已掌握</button>
+        <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
+          <button class="wrong-redo-btn" data-question-id="${escapeHtml(item.question_id)}" style="border:1px solid var(--primary);border-radius:8px;padding:7px 10px;background:transparent;color:var(--primary);cursor:pointer;font-weight:600;white-space:nowrap;">重做此题</button>
+          <button class="wrong-review-btn" data-question-id="${escapeHtml(item.question_id)}" style="border:0;border-radius:8px;padding:7px 10px;background:var(--primary);color:#fff;cursor:pointer;white-space:nowrap;">标记已掌握</button>
+        </div>
       </div>
     `).join('')
     : '<p style="color: var(--text-secondary)">该学科暂无错题。</p>';
@@ -1110,6 +1113,9 @@ async function renderDashboardWrongBook() {
         renderDashboardWrongBook();
       });
     });
+    root.querySelectorAll('.wrong-redo-btn').forEach(btn => {
+      btn.addEventListener('click', () => openWrongBookQuestion(btn.dataset.questionId));
+    });
   };
   bindResolveButtons(wrap);
 
@@ -1128,6 +1134,31 @@ async function renderDashboardWrongBook() {
       bindResolveButtons(wrongListEl);
     });
   }
+}
+
+// 错题「重做此题」：按 question_id 找到完整题目并在答题模态里重新作答。
+// 题目模态位于题库详情视图内，需先切换到该视图，否则模态被隐藏视图遮住无法显示。
+let _wrongBookAllQuestions = null;
+async function openWrongBookQuestion(questionId) {
+  if (!questionId) return;
+  let question = (state.allQuestions || []).find(q => String(q.id) === String(questionId));
+  if (!question) {
+    if (!_wrongBookAllQuestions) {
+      try {
+        const resp = await fetch('/question-bank/all');
+        if (resp.ok) _wrongBookAllQuestions = await resp.json();
+      } catch (e) {
+        console.warn('题库加载失败', e);
+      }
+    }
+    question = (_wrongBookAllQuestions || []).find(q => String(q.id) === String(questionId));
+  }
+  if (!question) {
+    alert('未找到该题目，可能已从题库移除或暂不可作答。');
+    return;
+  }
+  switchView('question-bank-detail');
+  openQuestion(question);
 }
 
 function renderCalendarGrid() {
@@ -4338,6 +4369,60 @@ async function submitProfileAssessment() {
 }
 
 // ========== 错题复习模式 ==========
+// 在前端组装复习卷：取未解决错题，回题库按 id 补全题干/选项/正确答案/解析。
+async function buildWrongBookReviewSet(count) {
+  let items = [];
+  try {
+    const resp = await fetch('/wrong-book');
+    if (resp.ok) {
+      const d = await resp.json();
+      items = Array.isArray(d) ? d : (d.wrong_book || d.questions || d.items || []);
+    }
+  } catch (e) {
+    console.warn('错题本加载失败', e);
+  }
+  if (!items.length) return { questions: [], remaining: 0 };
+
+  if (!_wrongBookAllQuestions) {
+    try {
+      const r = await fetch('/question-bank/all');
+      if (r.ok) _wrongBookAllQuestions = await r.json();
+    } catch (e) {
+      console.warn('题库加载失败', e);
+    }
+  }
+  const byId = new Map((_wrongBookAllQuestions || []).map(q => [String(q.id), q]));
+
+  const built = [];
+  for (const item of items) {
+    const q = byId.get(String(item.question_id)) || {};
+    const content = (item.content || q.content || q.title || '').trim();
+    const options = (item.options && item.options.length) ? item.options : (q.options || []);
+    const answerRaw = q.answer || q.correct_answer || item.correct_answer || '';
+    const correct = String(answerRaw).charAt(0).toUpperCase();
+    // 缺题干/选项/正确答案的错题无法作答判分，跳过。
+    if (!content || !options.length || !correct) continue;
+    built.push({
+      question_id: item.question_id,
+      subject: item.subject || q.subject || '',
+      content,
+      options,
+      correct_answer: correct,
+      explanation: q.explanation || q.analysis || item.explanation || '',
+      wrong_count: item.wrong_count || 1,
+      review_count: item.review_count || 0,
+    });
+  }
+
+  // Fisher–Yates 洗牌后取 count 道
+  for (let i = built.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [built[i], built[j]] = [built[j], built[i]];
+  }
+  const selected = built.slice(0, count);
+  return { questions: selected, remaining: Math.max(0, built.length - selected.length) };
+}
+
 async function startWrongBookReview() {
   const area = document.getElementById('reviewSessionArea');
   if (!area) return;
@@ -4345,11 +4430,12 @@ async function startWrongBookReview() {
   area.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-secondary);">正在生成复习卷...</div>';
 
   try {
-    const resp = await fetch('/wrong-book/review-session?count=5');
-    const data = await resp.json();
+    // 复习卷在前端从题库(/question-bank/all)按错题 id 组装，避免依赖后端
+    // review-session（其返回的原始错题条目常缺题干/选项/正确答案而无法作答）。
+    const data = await buildWrongBookReviewSet(5);
 
     if (!data.questions || data.questions.length === 0) {
-      area.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-secondary);">' + escapeHtml(data.message || '暂无待复习错题') + '</div>';
+      area.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-secondary);">' + escapeHtml(data.message || '暂无可复习错题（题目信息缺失）') + '</div>';
       return;
     }
 
