@@ -16,8 +16,8 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4.1-mini"
     llm_provider: str = "dashscope"
     dashscope_api_key: str | None = None
-    dashscope_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    dashscope_model: str = "qwen3.8-max"
+    dashscope_base_url: str = "https://llm-2sxrkhya27xgsx0c.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+    dashscope_model: str = "deepseek-v4-pro-0813"
     dashscope_enable_thinking: bool = True
     dashscope_include_reasoning: bool = False
     glm_api_key: str | None = None

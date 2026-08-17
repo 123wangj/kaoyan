@@ -71,6 +71,7 @@ class LLMClient:
         model: str | None = None,
         api_key: str | None = None,
         base_url: str | None = None,
+        enable_thinking: bool | None = None,
     ) -> str:
         """使用配置好的大模型生成文本；未配置时返回离线占位结果。
 
@@ -90,6 +91,7 @@ class LLMClient:
                 model,
                 api_key,
                 base_url,
+                enable_thinking,
             ):
                 if not chunk:
                     continue
@@ -115,6 +117,7 @@ class LLMClient:
                     api_key=api_key_val,
                     base_url=base_url_val,
                     image_base64=image_base64,
+                    enable_thinking=enable_thinking,
                 )
             except Exception as exc:
                 return self._model_error_response(user_prompt, exc)
@@ -132,6 +135,7 @@ class LLMClient:
                     api_key=api_key_val,
                     base_url=base_url_val,
                     image_base64=image_base64,
+                    enable_thinking=enable_thinking,
                 )
             except Exception as exc:
                 return self._model_error_response(user_prompt, exc)
@@ -179,6 +183,7 @@ class LLMClient:
         model: str | None = None,
         api_key: str | None = None,
         base_url: str | None = None,
+        enable_thinking: bool | None = None,
     ):
         """流式生成文本，逐 chunk yield 内容片段，用于 SSE 推送。"""
 
@@ -202,6 +207,7 @@ class LLMClient:
                     api_key=api_key_val,
                     base_url=base_url_val,
                     image_base64=image_base64,
+                    enable_thinking=enable_thinking,
                 )
                 return
             except Exception as exc:
@@ -221,6 +227,7 @@ class LLMClient:
                     api_key=api_key_val,
                     base_url=base_url_val,
                     image_base64=image_base64,
+                    enable_thinking=enable_thinking,
                 )
                 return
             except Exception as exc:
@@ -236,6 +243,7 @@ class LLMClient:
                     api_key=api_key or self.settings.openai_api_key,
                     base_url=base_url or self.settings.openai_base_url or "https://api.openai.com/v1",
                     image_base64=image_base64,
+                    enable_thinking=enable_thinking,
                 )
                 return
             except Exception as exc:
@@ -252,6 +260,7 @@ class LLMClient:
         api_key: str,
         base_url: str,
         image_base64: str | None = None,
+        enable_thinking: bool | None = None,
     ):
         """使用 OpenAI 兼容接口流式生成，逐 chunk yield。"""
 
@@ -267,7 +276,9 @@ class LLMClient:
         else:
             user_content = user_prompt
 
-        use_dashscope_thinking = "dashscope" in base_url.lower()
+        # 阿里云百炼公有云(dashscope.aliyuncs.com)与专属 MaaS 部署
+        # (*.maas.aliyuncs.com)都使用 DashScope 风格的 enable_thinking 开关。
+        use_dashscope_thinking = "aliyuncs.com" in base_url.lower()
         use_glm_thinking = "bigmodel.cn" in base_url.lower()
 
         kwargs = {
@@ -278,10 +289,20 @@ class LLMClient:
             ],
             "stream": True,
         }
+        thinking_enabled = (
+            self.settings.dashscope_enable_thinking
+            if enable_thinking is None else enable_thinking
+        )
         if use_dashscope_thinking:
-            kwargs["extra_body"] = {"enable_thinking": self.settings.dashscope_enable_thinking}
-        elif use_glm_thinking and self.settings.glm_enable_thinking:
-            kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
+            kwargs["extra_body"] = {"enable_thinking": thinking_enabled}
+        elif use_glm_thinking:
+            glm_thinking_enabled = (
+                self.settings.glm_enable_thinking
+                if enable_thinking is None else enable_thinking
+            )
+            kwargs["extra_body"] = {
+                "thinking": {"type": "enabled" if glm_thinking_enabled else "disabled"}
+            }
 
         stream = client.chat.completions.create(**kwargs)
 
@@ -308,6 +329,7 @@ class LLMClient:
         api_key: str,
         base_url: str,
         image_base64: str | None = None,
+        enable_thinking: bool | None = None,
     ) -> str:
         """使用 OpenAI 兼容接口生成回答（适用于 DashScope、DeepSeek、Kimi、GLM 等）。"""
 
@@ -323,7 +345,9 @@ class LLMClient:
         else:
             user_content = user_prompt
 
-        use_dashscope_thinking = "dashscope" in base_url.lower()
+        # 阿里云百炼公有云(dashscope.aliyuncs.com)与专属 MaaS 部署
+        # (*.maas.aliyuncs.com)都使用 DashScope 风格的 enable_thinking 开关。
+        use_dashscope_thinking = "aliyuncs.com" in base_url.lower()
         use_glm_thinking = "bigmodel.cn" in base_url.lower()
 
         kwargs = {
@@ -334,10 +358,20 @@ class LLMClient:
             ],
             "stream": True,
         }
+        thinking_enabled = (
+            self.settings.dashscope_enable_thinking
+            if enable_thinking is None else enable_thinking
+        )
         if use_dashscope_thinking:
-            kwargs["extra_body"] = {"enable_thinking": self.settings.dashscope_enable_thinking}
-        elif use_glm_thinking and self.settings.glm_enable_thinking:
-            kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
+            kwargs["extra_body"] = {"enable_thinking": thinking_enabled}
+        elif use_glm_thinking:
+            glm_thinking_enabled = (
+                self.settings.glm_enable_thinking
+                if enable_thinking is None else enable_thinking
+            )
+            kwargs["extra_body"] = {
+                "thinking": {"type": "enabled" if glm_thinking_enabled else "disabled"}
+            }
 
         stream = client.chat.completions.create(**kwargs)
 
