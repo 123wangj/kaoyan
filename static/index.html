@@ -201,7 +201,13 @@
               <span class="dash-logo-icon">408</span>
               <span class="dash-logo-text">题库作战台</span>
             </div>
-            <div class="dash-top-copy">用数据把“还差哪里”变得一眼可见。</div>
+            <div class="dash-top-actions">
+              <span class="dash-top-copy">用数据把“还差哪里”变得一眼可见。</span>
+              <button type="button" class="dash-wrongbook-entry" onclick="switchView('wrong-book')">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm1.71 12.29-1.42 1.42L12 13.41l-2.29 2.3-1.42-1.42L10.59 12 8.29 9.71l1.42-1.42L12 10.59l2.29-2.3 1.42 1.42L13.41 12l2.3 2.29zM13 9V3.5L18.5 9H13z"/></svg>
+                <span>错题本</span>
+              </button>
+            </div>
           </div>
 
           <div class="dash-welcome-row">
@@ -302,6 +308,21 @@
             </div>
             <div id="dashReviewSessionArea" style="display:none;"></div>
           </div>
+        </div>
+      </section>
+
+      <section id="wrong-book-view" class="view">
+        <div class="profile-container">
+          <div class="view-header">
+            <button type="button" class="wrong-book-back" onclick="switchView('question-bank')">
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+              <span>返回题库总览</span>
+            </button>
+            <span class="eyebrow">WRONG BOOK</span>
+            <h1 class="view-title">错题本</h1>
+            <p class="view-subtitle">按学科归档做错的题目，进入复习模式逐题攻克。</p>
+          </div>
+          <div class="dash-wrongbook-section" id="dashWrongBook"></div>
         </div>
       </section>
 

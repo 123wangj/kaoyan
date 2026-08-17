@@ -6543,6 +6543,84 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
+.dash-wrongbook-section {
+  padding: 1.5rem;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.dash-wrongbook-section .dash-section-header {
+  margin-bottom: 1.25rem;
+}
+
+.dash-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.dash-wrongbook-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(14, 165, 233, 0.24);
+  transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
+}
+
+.dash-wrongbook-entry:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+  box-shadow: 0 10px 22px rgba(14, 165, 233, 0.3);
+}
+
+.dash-wrongbook-entry svg {
+  fill: currentColor;
+}
+
+.wrong-book-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 1rem;
+  padding: 6px 12px 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+
+.wrong-book-back:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.wrong-book-back svg {
+  fill: currentColor;
+}
+
+@media (max-width: 700px) {
+  .dash-top-actions {
+    gap: 0.5rem;
+  }
+  .dash-top-actions .dash-top-copy {
+    display: none;
+  }
+}
+
 .spc-tag {
   background: rgba(14, 165, 233, 0.08);
   color: #335066;
