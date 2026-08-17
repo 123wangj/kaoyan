@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 const subjects = ['数据结构', '计算机组成原理', '操作系统', '计算机网络'];
-const questions = Array.from({ length: 50 }, (_, index) => ({
+const questions = Array.from({ length: 40 }, (_, index) => ({
   id: `exam-q-${index + 1}`,
   type: 'choice',
   content: `模拟试卷第 ${index + 1} 题的题干`,
@@ -12,7 +12,7 @@ const questions = Array.from({ length: 50 }, (_, index) => ({
 }));
 
 const baseExam = {
-  id: 'browser-exam', title: '408 四科均衡试卷 · 2026-08-02', status: 'in_progress',
+  id: 'browser-exam', title: '408 统考结构模拟卷 · 2026-08-02', status: 'in_progress',
   created_at: '2026-08-02T12:00:00+08:00', questions, answers: {}
 };
 
@@ -68,15 +68,15 @@ test('creates, answers and submits a balanced exam report', async ({ page }) => 
   await expect(page.locator('#exam-view')).toHaveClass(/active/);
   await expect(page.locator('.exam-hero-card')).toBeVisible();
   await page.locator('.exam-primary').click();
-  await expect(page.locator('.exam-sheet-nav button')).toHaveCount(50);
+  await expect(page.locator('.exam-sheet-nav button')).toHaveCount(40);
   await page.locator('.exam-options button').first().click();
-  await expect(page.locator('.exam-taking-head small')).toContainText('1 / 50');
+  await expect(page.locator('.exam-taking-head small')).toContainText('1 / 40');
   page.once('dialog', dialog => dialog.accept());
   await page.locator('.exam-submit').click();
   await expect(page.locator('.exam-score-ring strong')).toHaveText('98');
   await expect(page.locator('.exam-subject-grid > div')).toHaveCount(4);
   await expect(page.locator('.exam-weak-item')).toHaveCount(1);
-  await expect(page.locator('.exam-review-item')).toHaveCount(50);
+  await expect(page.locator('.exam-review-item')).toHaveCount(40);
   await expect(page.locator('.exam-reason')).toBeVisible();
 
   const sidebarBox = await page.locator('.sidebar').boundingBox();

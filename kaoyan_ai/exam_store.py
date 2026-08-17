@@ -12,6 +12,12 @@ from typing import Any
 
 
 SUBJECTS = ("数据结构", "计算机组成原理", "操作系统", "计算机网络")
+EXAM_DISTRIBUTION = {
+    "数据结构": 11,
+    "计算机组成原理": 11,
+    "操作系统": 10,
+    "计算机网络": 8,
+}
 _LOCK = threading.RLock()
 
 
@@ -20,8 +26,7 @@ def _now() -> str:
 
 
 def _letter(value: object) -> str:
-    match = re.search(r"[A-D]", str(value or "").upper())
-    return match.group(0) if match else ""
+    return "".join(sorted(set(re.findall(r"[A-D]", str(value or "").upper()))))
 
 
 def _path(data_dir: Path, user_id: str) -> Path:
@@ -73,7 +78,7 @@ def create_exam(
     data_dir: Path,
     user_id: str,
     questions: list[dict[str, Any]],
-    count: int = 50,
+    count: int = 40,
 ) -> dict[str, Any]:
     count = max(4, min(int(count), 100))
     pools: dict[str, list[dict[str, Any]]] = {subject: [] for subject in SUBJECTS}
@@ -83,7 +88,7 @@ def create_exam(
             subject in pools
             and question.get("type") == "choice"
             and len(question.get("options") or []) >= 4
-            and _letter(question.get("answer"))
+            and len(_letter(question.get("answer"))) == 1
         ):
             pools[subject].append(question)
     if any(not pool for pool in pools.values()):
@@ -91,21 +96,25 @@ def create_exam(
         raise ValueError("以下科目没有可用选择题：" + "、".join(missing))
 
     rng = random.SystemRandom()
-    base, extra = divmod(count, len(SUBJECTS))
-    order = list(SUBJECTS)
-    rng.shuffle(order)
+    if count == 40:
+        allocation = dict(EXAM_DISTRIBUTION)
+    else:
+        base, extra = divmod(count, len(SUBJECTS))
+        allocation = {
+            subject: base + (1 if index < extra else 0)
+            for index, subject in enumerate(SUBJECTS)
+        }
     selected: list[dict[str, Any]] = []
-    for index, subject in enumerate(order):
-        take = base + (1 if index < extra else 0)
+    for subject in SUBJECTS:
+        take = allocation[subject]
         if len(pools[subject]) < take:
             raise ValueError(f"{subject}可用题目不足 {take} 道")
         selected.extend(rng.sample(pools[subject], take))
-    rng.shuffle(selected)
 
     created_at = _now()
     record = {
         "id": uuid.uuid4().hex,
-        "title": f"408 四科均衡试卷 · {created_at[:10]}",
+        "title": f"408 统考结构模拟卷 · {created_at[:10]}",
         "status": "in_progress",
         "created_at": created_at,
         "submitted_at": None,

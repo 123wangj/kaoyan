@@ -116,7 +116,9 @@ class AgentPlanner:
 
     def plan(self, request: AgentRequest) -> list[PlanStep]:
         intents = self.intent_agent.classify_many(request)
-        llm_intents = self._llm_intents(request)
+        # Keyword routing already preserves message order for explicit compound
+        # requests. Avoid a redundant model round-trip in that common case.
+        llm_intents = [] if len(intents) > 1 else self._llm_intents(request)
         if llm_intents:
             intents = llm_intents
         steps: list[PlanStep] = []
@@ -220,7 +222,9 @@ class AgentPlanner:
             },
             ensure_ascii=False,
         )
-        text = self.llm.generate(system_prompt, user_prompt)
+        # Intent JSON does not benefit from expensive chain-of-thought. The
+        # specialist answer still uses the configured thinking mode unchanged.
+        text = self.llm.generate(system_prompt, user_prompt, enable_thinking=False)
         try:
             match = re.search(r"\{[\s\S]*\}", text or "")
             payload = json.loads(match.group(0)) if match else {}

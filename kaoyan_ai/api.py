@@ -26,11 +26,30 @@ import os
 logger = logging.getLogger("kaoyan_ai")
 
 from kaoyan_ai.agents.base import LLMClient
-from kaoyan_ai.auth import LoginRequest, RegisterRequest, decode_token, get_current_user, login_user, register_user, require_user
+from kaoyan_ai.auth import (
+    BindAccountRequest,
+    ChangePasswordRequest,
+    LoginRequest,
+    RegisterRequest,
+    ResetPasswordRequest,
+    SmsCodeRequest,
+    account_profile,
+    bind_account,
+    change_password,
+    decode_token,
+    ensure_auth_schema,
+    get_current_user,
+    login_user,
+    register_user,
+    request_sms_code,
+    reset_password,
+    require_user,
+)
 from kaoyan_ai.config import get_settings
 from kaoyan_ai.graph import KaoyanTutorGraph, conversation_memory
 from kaoyan_ai.agent_runtime import RunTraceStore
 from kaoyan_ai.learning import (
+    answer_records_for_source,
     _now,
     acknowledge_push,
     completion_mastery_summary,
@@ -38,6 +57,7 @@ from kaoyan_ai.learning import (
     load_learning_state,
     mastery_summary,
     memory_review_queue,
+    normalize_choice_answer,
     question_completion_progress,
     record_answer,
     review_wrong_question,
@@ -45,10 +65,12 @@ from kaoyan_ai.learning import (
     save_question_note,
     delete_question_note,
     save_learning_state,
+    set_daily_question_goal,
     today_tasks,
     uncomplete_daily_task,
     user_profile_payload,
     wrong_book_items,
+    yesterday_review_items,
 )
 from kaoyan_ai.rag import LocalRetriever
 from kaoyan_ai import db_store
@@ -60,6 +82,7 @@ from kaoyan_ai.question_enrichment import (
     question_is_displayable,
     question_needs_image,
 )
+from kaoyan_ai import profile_assessment
 from kaoyan_ai.question_quality import question_is_well_formed
 from kaoyan_ai.question_visualization import build_question_visualization, infer_error_focus, visualization_capability
 from kaoyan_ai.knowledge_visualization import build_knowledge_visualization
@@ -144,7 +167,7 @@ def _estimate_tokens(text: str) -> int:
 
 MODEL_SWITCH_PLAN = [
     # (model_name, api_key_env, base_url, token_threshold, label)
-    ("qwen3.8-max", "glm_api_key", "https://llm-2sxrkhya27xgsx0c.cn-beijing.maas.aliyuncs.com/compatible-mode/v1", float("inf"), "qwen3.8-max"),
+    ("deepseek-v4-pro-0813", "dashscope_api_key", "https://llm-2sxrkhya27xgsx0c.cn-beijing.maas.aliyuncs.com/compatible-mode/v1", float("inf"), "deepseek-v4-pro-0813"),
 ]
 
 # 当前使用的是 MODEL_SWITCH_PLAN 中的第几个模型（索引）
@@ -173,10 +196,10 @@ def _get_current_model_config() -> tuple[str, str | None, str | None, str]:
     # No configured key: keep the selected provider visible, while LLMClient
     # returns an explicit offline result instead of silently using another model.
     return (
-        settings.glm_model,
-        settings.glm_api_key,
-        settings.glm_base_url,
-        "qwen3.8-max (未配置 API Key)",
+        settings.dashscope_model,
+        settings.dashscope_api_key,
+        settings.dashscope_base_url,
+        "deepseek-v4-pro-0813 (未配置 API Key)",
     )
 
 
@@ -515,13 +538,29 @@ def school_selection_simulate(
 # 认证：注册 / 登录
 # ============================================================
 @app.post("/api/auth/register")
-def api_register(req: RegisterRequest):
-    """注册新用户(内测阶段暂停开放)。"""
-    return {
-        "success": False,
-        "error": "目前正处于内测阶段,暂不支持注册,如想体验,请联系:17635575899",
-        "closed": True,
-    }
+def api_register(req: RegisterRequest, response: Response):
+    """开放注册；邀请码/手机号选填，每位用户获得独立邀请码。"""
+    if req.phone and not settings.sms_feature_enabled:
+        raise HTTPException(status_code=404, detail="手机号注册功能暂未开放")
+    result = register_user(req)
+    token = result.get("token")
+    if result.get("success") and token:
+        _set_auth_cookie(response, token)
+    return result
+
+
+def _set_auth_cookie(response: Response, token: str) -> None:
+    is_production = settings.app_env.lower() == "production"
+    response.set_cookie(
+        "kaoyan_session",
+        token,
+        max_age=int(getattr(settings, "jwt_expires_hours", 24 * 7)) * 3600,
+        httponly=True,
+        secure=is_production,
+        samesite="lax",
+        path="/",
+        domain=".sx01bit.cn" if is_production else None,
+    )
 
 
 @app.post("/api/auth/login")
@@ -530,18 +569,96 @@ def api_login(req: LoginRequest, response: Response):
     result = login_user(req)
     token = result.get("token")
     if result.get("success") and token:
-        is_production = settings.app_env.lower() == "production"
-        response.set_cookie(
-            "kaoyan_session",
-            token,
-            max_age=int(getattr(settings, "jwt_expires_hours", 24 * 7)) * 3600,
-            httponly=True,
-            secure=is_production,
-            samesite="lax",
-            path="/",
-            domain=".sx01bit.cn" if is_production else None,
-        )
+        _set_auth_cookie(response, token)
     return result
+
+
+@app.post("/api/auth/logout")
+def api_logout(response: Response):
+    is_production = settings.app_env.lower() == "production"
+    response.delete_cookie(
+        "kaoyan_session",
+        path="/",
+        domain=".sx01bit.cn" if is_production else None,
+        secure=is_production,
+        httponly=True,
+        samesite="lax",
+    )
+    return {"success": True}
+
+
+@app.get("/api/auth/account")
+def api_account(user: str = Depends(require_user)):
+    return account_profile(user)
+
+
+@app.post("/api/auth/change-password")
+def api_change_password(req: ChangePasswordRequest, user: str = Depends(require_user)):
+    return change_password(user, req)
+
+
+def _client_ip(request: Request) -> str | None:
+    """获取真实客户端 IP；生产环境在 nginx 反代之后，优先取转发头首个地址。"""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        first = forwarded.split(",")[0].strip()
+        if first:
+            return first[:64]
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()[:64]
+    return request.client.host if request.client else None
+
+
+@app.post("/api/auth/sms/request")
+def api_request_sms(
+    req: SmsCodeRequest,
+    request: Request,
+    authorization: str | None = Header(default=None),
+    kaoyan_session: str | None = Cookie(default=None),
+):
+    if not settings.sms_feature_enabled:
+        raise HTTPException(status_code=404, detail="手机号验证功能暂未开放")
+    try:
+        bound_user = None
+        if req.purpose == "bind":
+            candidates = []
+            if authorization and authorization.lower().startswith("bearer "):
+                candidates.append(authorization.split(" ", 1)[1].strip())
+            if kaoyan_session:
+                candidates.append(kaoyan_session)
+            for token in candidates:
+                payload = decode_token(token)
+                if payload and payload.get("sub"):
+                    bound_user = str(payload["sub"])
+                    break
+            if not bound_user:
+                raise HTTPException(status_code=401, detail="请先登录")
+        return request_sms_code(req.phone, req.purpose, bound_user, _client_ip(request))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.put("/api/auth/account")
+def api_bind_account(req: BindAccountRequest, user: str = Depends(require_user)):
+    if req.phone is not None and not settings.sms_feature_enabled:
+        raise HTTPException(status_code=404, detail="手机号绑定功能暂未开放")
+    try:
+        return bind_account(user, req)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/auth/reset-password")
+def api_reset_password(req: ResetPasswordRequest):
+    if not settings.sms_feature_enabled:
+        raise HTTPException(status_code=404, detail="手机号找回功能暂未开放")
+    try:
+        return reset_password(req)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/auth/verify")
@@ -567,7 +684,7 @@ def api_verify_token(
 @app.get("/api/auth/me")
 def api_me(user: str = Depends(require_user)):
     """获取当前登录用户的信息（连同 token 是否有效）。"""
-    return {"user_id": user, "authenticated": True}
+    return {**account_profile(user), "authenticated": True}
 
 
 @app.on_event("startup")
@@ -576,6 +693,11 @@ def _on_startup():
     import logging
     logger = logging.getLogger("kaoyan_ai")
     logger.info("=" * 60)
+    try:
+        ensure_auth_schema()
+        logger.info("账号体系迁移与邀请码补齐完成")
+    except Exception as exc:
+        logger.warning(f"账号体系迁移失败: {exc}")
     logger.info("考研 AI 平台启动")
     logger.info(f"  APP_ENV       = {settings.app_env}")
     logger.info(f"  DATA_DIR      = {settings.data_dir}")
@@ -1240,6 +1362,13 @@ def _find_question_by_id(question_id: str) -> dict | None:
     return next((q for q in _load_questions_cached() if str(q.get("id")) == question_id), None)
 
 
+def _catalog_question_points(question: dict) -> list[str]:
+    raw = question.get("knowledge_points") or []
+    if not isinstance(raw, list):
+        raw = [raw]
+    return list(dict.fromkeys(str(point).strip() for point in raw if str(point).strip()))
+
+
 def _question_knowledge_points(question: dict | None) -> list[str]:
     if not question:
         return []
@@ -1331,15 +1460,13 @@ def _filter_daily_questions(questions: list[dict], limit: int) -> list[dict]:
 
 
 def _answer_letter(value: object) -> str:
-    text = str(value or "").strip().upper()
-    match = re.search(r"[A-D]", text)
-    return match.group(0) if match else text[:1]
+    return normalize_choice_answer(value)
 
 
 @app.post("/exams")
 def create_exam(payload: dict | None = None, user: str = Depends(require_user)):
-    """Create a balanced four-subject paper without touching practice records."""
-    requested = int((payload or {}).get("question_count") or 50)
+    """Create a 408 paper using the real 40-question subject distribution."""
+    requested = int((payload or {}).get("question_count") or 40)
     try:
         return exam_store.create_exam(
             settings.data_dir,
@@ -1389,13 +1516,14 @@ def get_questions_paged(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=10, le=200),
     subject: str | None = Query(None),
+    knowledge_point: str | None = Query(None),
     year: str | None = Query(None),
     status: str | None = Query(None),
     favorite_ids: str | None = Query(None, max_length=12000),
     user_id: str = Query("u1"),
     user: str = Depends(require_user),
 ):
-    """分页返回题库，支持按科目/年份筛选。"""
+    """分页返回题库，支持按科目、知识点、年份和作答状态筛选。"""
     user_id = user
     all_questions = _load_questions_cached()
 
@@ -1403,6 +1531,12 @@ def get_questions_paged(
     filtered = all_questions
     if subject and subject != "all":
         filtered = [q for q in filtered if q.get("subject") == subject]
+    knowledge_source = filtered
+    if knowledge_point and knowledge_point != "all":
+        filtered = [
+            q for q in filtered
+            if knowledge_point in _catalog_question_points(q)
+        ]
     if year and year != "all":
         filtered = [q for q in filtered if q.get("year") == year]
     if favorite_ids:
@@ -1463,6 +1597,25 @@ def get_questions_paged(
                     }.items()
                 )
             ),
+            "knowledge_points": [
+                {"title": point, "count": count}
+                for point, count in sorted(
+                    {
+                        point: sum(
+                            1
+                            for q in knowledge_source
+                            if point in _catalog_question_points(q)
+                        )
+                        for point in {
+                            str(item).strip()
+                            for q in knowledge_source
+                            for item in _catalog_question_points(q)
+                            if str(item).strip()
+                        }
+                    }.items(),
+                    key=lambda item: (-item[1], item[0]),
+                )
+            ],
             "catalog_total": len(all_questions),
         },
     }
@@ -1479,6 +1632,70 @@ def user_profile(user_id: str = Query("u1"), user: str = Depends(require_user)):
         _load_knowledge_points(),
     )
     return _hydrate_learning_display(payload)
+
+
+@app.get("/user/profile-assessment/status")
+def profile_assessment_status(user: str = Depends(require_user)):
+    return profile_assessment.status(settings.data_dir, user)
+
+
+@app.post("/user/profile-assessment/start")
+def start_profile_assessment(payload: dict | None = None, user: str = Depends(require_user)):
+    try:
+        return profile_assessment.create_assessment(
+            settings.data_dir,
+            user,
+            _load_questions_cached(),
+            force=bool((payload or {}).get("force")),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/user/profile-assessment/submit")
+def submit_profile_assessment(payload: dict, user: str = Depends(require_user)):
+    assessment_id = str(payload.get("assessment_id") or "").strip()
+    record = profile_assessment.get_assessment(settings.data_dir, user, assessment_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="画像测评不存在")
+    if record.get("status") == "submitted":
+        return {"success": True, "assessment": profile_assessment.serialize(record), "already_submitted": True}
+    try:
+        graded = profile_assessment.grade(record, payload.get("answers") or {})
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    for item in graded["details"]:
+        question = item["question"]
+        record_answer(
+            settings.data_dir,
+            {
+                "user_id": user,
+                "question_id": question.get("id"),
+                "selected_option": item["selected_option"],
+                "correct_answer": item["correct_answer"],
+                "is_correct": item["is_correct"],
+                "subject": question.get("subject"),
+                "knowledge_points": question.get("knowledge_points") or [],
+                "question_content": question.get("content") or "",
+                "options": question.get("options") or [],
+                "difficulty": question.get("difficulty"),
+                "source": f"profile_assessment:{assessment_id}",
+            },
+        )
+    assessment = profile_assessment.finalize(
+        settings.data_dir,
+        user,
+        assessment_id,
+        graded,
+        payload.get("duration_seconds"),
+    )
+    daily_push_store.invalidate(user)
+    return {
+        "success": True,
+        "assessment": assessment,
+        "profile": user_profile_summary(user=user),
+    }
 
 
 @app.get("/user/profile/summary")
@@ -1794,6 +2011,33 @@ def get_today_tasks(user_id: str = Query("u1"), user: str = Depends(require_user
         exam_context=exam_context,
     )
     return _hydrate_learning_display({"daily_tasks": payload})["daily_tasks"]
+
+
+@app.get("/user/preferences/daily-goal")
+def get_daily_goal(user: str = Depends(require_user)):
+    state = load_learning_state(settings.data_dir, user)
+    return {"daily_question_goal": int((state.get("preferences") or {}).get("daily_question_goal") or 5)}
+
+
+@app.put("/user/preferences/daily-goal")
+def update_daily_goal(payload: dict, user: str = Depends(require_user)):
+    try:
+        value = int(payload.get("daily_question_goal"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="每日题量必须是整数") from exc
+    return {"daily_question_goal": set_daily_question_goal(settings.data_dir, user, value)}
+
+
+@app.get("/daily-review/yesterday")
+def get_yesterday_review(
+    limit: int = Query(5, ge=1, le=20),
+    user: str = Depends(require_user),
+):
+    state = load_learning_state(settings.data_dir, user)
+    return {
+        "date": (date.today() - timedelta(days=1)).isoformat(),
+        "items": yesterday_review_items(state, _load_questions_cached(), limit=limit),
+    }
 
 
 @app.post("/daily-tasks/complete")
@@ -2918,7 +3162,7 @@ def modify_study_plan_with_ai(payload: dict, user: str = Depends(require_user)):
 
 @app.get("/study-plan/task/{task_id}/material")
 def study_plan_task_material(task_id: str, user: str = Depends(require_user)):
-    plan, _ = _current_study_plan(user)
+    plan, state = _current_study_plan(user)
     task = _find_study_plan_task(plan, task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="计划任务不存在")
@@ -2939,11 +3183,35 @@ def study_plan_task_material(task_id: str, user: str = Depends(require_user)):
         str(item.get("id") or ""): item
         for item in _load_questions_cached()
     }
-    questions = [
-        _safe_plan_question(question_map[qid])
-        for qid in question_ids
-        if qid in question_map
-    ]
+    latest_attempts: dict[str, dict] = {}
+    expected_source = f"study_plan:{task_id}"
+    for record in answer_records_for_source(
+        settings.data_dir,
+        user,
+        expected_source,
+        fallback_records=state.get("answer_records") or [],
+    ):
+        question_id = str(record.get("question_id") or "")
+        if question_id in question_ids:
+            latest_attempts[question_id] = record
+
+    questions = []
+    for qid in question_ids:
+        if qid not in question_map:
+            continue
+        question = _safe_plan_question(question_map[qid])
+        attempt = latest_attempts.get(qid)
+        if attempt:
+            question["attempt"] = {
+                "selected_option": attempt.get("selected_option") or "",
+                "correct_answer": attempt.get("correct_answer") or "",
+                "is_correct": bool(attempt.get("is_correct")),
+                "created_at": attempt.get("created_at"),
+                "explanation": question_map[qid].get("explanation")
+                or question_map[qid].get("analysis")
+                or "",
+            }
+        questions.append(question)
     return {
         "task": task,
         "knowledge": knowledge[0] if knowledge else None,
@@ -3102,6 +3370,7 @@ def get_task_material(task_id: str, user: str = Depends(require_user)):
         all_q = _load_questions_cached()
         import random
         rng = random.Random(f"{user}|{task_id}")
+        target_count = max(1, min(int(task.get("target_count") or 5), 100))
         target_points = [str(point).strip() for point in (task.get("knowledge_points") or []) if str(point).strip()]
         targeted_questions = []
         if target_points:
@@ -3119,15 +3388,15 @@ def get_task_material(task_id: str, user: str = Depends(require_user)):
         question_pool = targeted_questions or all_q
         ready_questions = [q for q in question_pool if _question_feedback_ready(q)] or question_pool
         rng.shuffle(ready_questions)
-        questions = _filter_daily_questions(ready_questions, limit=5)
-        if targeted_questions and len(questions) < 5:
+        questions = _filter_daily_questions(ready_questions, limit=target_count)
+        if targeted_questions and len(questions) < target_count:
             used_ids = {str(q.get("id")) for q in questions}
             fallback = [
                 q for q in all_q
                 if str(q.get("id")) not in used_ids and _question_feedback_ready(q)
             ]
             rng.shuffle(fallback)
-            questions.extend(_filter_daily_questions(fallback, limit=5 - len(questions)))
+            questions.extend(_filter_daily_questions(fallback, limit=target_count - len(questions)))
         knowledge = {
             "id": "mixed",
             "title": "试卷薄弱点复测" if target_points else "薄弱点混合练习",
@@ -3506,7 +3775,7 @@ def submit_question_bank_answer(payload: dict, user: str = Depends(require_user)
     question = _find_question_by_id(question_id)
     if question is None:
         raise HTTPException(status_code=404, detail="题目不存在或已下架")
-    selected_option = str(payload.get("selected_option", "")).strip().upper()
+    selected_option = normalize_choice_answer(payload.get("selected_option"))
     correct_answer_raw = str(question.get("answer") or question.get("correct_answer") or "").strip()
     correct_answer = _answer_letter(correct_answer_raw)
     explanation = str(question.get("explanation") or question.get("analysis") or "").strip()
@@ -3692,15 +3961,17 @@ async def chat_stream(request: AgentRequest, user: str = Depends(require_user)):
 
     _record_usage(request.user_id, 0)
 
-    history = _load_conversation_history(request.user_id)
-    history_text = _format_conversation_history(history)
-
-    if history_text:
-        request.metadata["conversation_history"] = history_text
-
     async def event_generator():
         full_answer = ""
         try:
+            # Flush headers and visible feedback immediately. Durable history is
+            # read off the event loop before agent execution starts.
+            yield f"data: {json.dumps({'type': 'preparing', 'content': '正在读取上下文并匹配最相关资料'}, ensure_ascii=False)}\n\n"
+            history = await asyncio.to_thread(_load_conversation_history, request.user_id)
+            history_text = _format_conversation_history(history)
+            if history_text:
+                request.metadata["conversation_history"] = history_text
+
             # Agent execution is synchronous, so a bounded queue forwards plan,
             # tool and answer events to the browser as soon as they are emitted.
             loop = asyncio.get_running_loop()
@@ -3861,15 +4132,15 @@ def submit_daily_push_answer(payload: dict, user: str = Depends(require_user)):
     user_id = user
     """提交每日推送题目的作答结果并返回批改反馈。"""
     question_id = payload.get("question_id", "")
-    selected_option = payload.get("selected_option", "")
-    correct_answer = payload.get("correct_answer", "")
+    selected_option = normalize_choice_answer(payload.get("selected_option"))
+    correct_answer = normalize_choice_answer(payload.get("correct_answer"))
     question_content = payload.get("question_content", "")
     options = payload.get("options", [])
     explanation = payload.get("explanation", "")
     subject = payload.get("subject", "")
     knowledge_point = payload.get("knowledge_point", "")
 
-    is_correct = selected_option.upper() == correct_answer.upper() if correct_answer else False
+    is_correct = selected_option == correct_answer if correct_answer else False
 
     feedback = {
         "question_id": question_id,

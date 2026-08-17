@@ -38,6 +38,21 @@ class Settings(BaseSettings):
     agent_max_iterations: int = 12
     agent_trace_enabled: bool = True
     agent_llm_planner_enabled: bool = True
+    sms_webhook_url: str | None = None
+    sms_webhook_token: str | None = None
+    sms_feature_enabled: bool = False
+    sms_code_ttl_minutes: int = 10
+    sms_code_cooldown_seconds: int = 60
+    # 防刷：单手机号/单 IP 每日发送上限
+    sms_daily_limit_per_phone: int = 10
+    sms_daily_limit_per_ip: int = 30
+    # 阿里云短信（Dysmsapi）。配置了 access key 后优先走阿里云，否则回退到 webhook。
+    aliyun_sms_access_key_id: str | None = None
+    aliyun_sms_access_key_secret: str | None = None
+    aliyun_sms_sign_name: str | None = None
+    aliyun_sms_template_code: str | None = None
+    aliyun_sms_region_id: str = "cn-hangzhou"
+    aliyun_sms_endpoint: str = "https://dysmsapi.aliyuncs.com/"
     data_dir: Path = Path("data")
     skill_dir: Path = Path("skills")
 

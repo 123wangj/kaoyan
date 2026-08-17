@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 
 from kaoyan_ai.agent_runtime import AgentPlanner, AgentRuntime, RunTraceStore
 from kaoyan_ai.agents.intent import IntentAgent
 from kaoyan_ai.agents.base import LLMClient
+from kaoyan_ai.agents.solution import SolutionAgent
 from kaoyan_ai.evaluation import trace_metrics
 from kaoyan_ai.memory import SemanticMemory
 from kaoyan_ai.rag import LocalRetriever
@@ -37,6 +39,62 @@ def test_compound_goal_is_decomposed_in_message_order() -> None:
     plan_step = next(step for step in steps if step.tool_name == "create_study_plan")
     assert plan_step.tool_args["answers"]["duration"] == "1周"
     assert plan_step.tool_args["answers"]["study_days_per_week"] == 7
+
+
+def test_explicit_compound_goal_skips_redundant_llm_planner(monkeypatch) -> None:
+    old = get_settings().agent_llm_planner_enabled
+    get_settings().agent_llm_planner_enabled = True
+    planner = AgentPlanner(IntentAgent())
+    monkeypatch.setattr(
+        planner.llm,
+        "generate",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("planner should be skipped")),
+    )
+    try:
+        steps = planner.plan(
+            AgentRequest(user_id="u", message="先分析我的薄弱点，再制定七天学习计划")
+        )
+    finally:
+        get_settings().agent_llm_planner_enabled = old
+    delegates = [step.intent for step in steps if step.tool_name.startswith("delegate_")]
+    assert delegates == [Intent.PERSONAL_ANALYSIS, Intent.STUDY_PLAN]
+
+
+def test_ambiguous_compound_planner_disables_thinking(monkeypatch) -> None:
+    old = get_settings().agent_llm_planner_enabled
+    get_settings().agent_llm_planner_enabled = True
+    planner = AgentPlanner(IntentAgent())
+    captured = {}
+
+    def fake_generate(*_args, **kwargs):
+        captured.update(kwargs)
+        return '{"intents":["solve_question"]}'
+
+    monkeypatch.setattr(planner.llm, "generate", fake_generate)
+    try:
+        planner.plan(AgentRequest(user_id="u", message="这个过程然后呢？"))
+    finally:
+        get_settings().agent_llm_planner_enabled = old
+    assert captured["enable_thinking"] is False
+
+
+def test_solution_retrieves_independent_collections_concurrently() -> None:
+    class ConcurrentRetriever:
+        def __init__(self):
+            self.barrier = threading.Barrier(2)
+            self.thread_ids = set()
+
+        def retrieve(self, *_args, **_kwargs):
+            self.thread_ids.add(threading.get_ident())
+            self.barrier.wait(timeout=1)
+            return []
+
+    retriever = ConcurrentRetriever()
+    agent = SolutionAgent(retriever=retriever)
+    agent.llm = type("OfflineLLM", (), {"generate": lambda *_args, **_kwargs: "答案"})()
+    response = agent.run(AgentRequest(user_id="u", message="解释虚拟内存"))
+    assert response.answer == "答案"
+    assert len(retriever.thread_ids) == 2
 
 
 def test_runtime_executes_tools_combines_answers_and_persists_trace(tmp_path: Path) -> None:

@@ -167,6 +167,113 @@ def test_question_submit_records_authenticated_user(monkeypatch) -> None:
     assert seen["correct_answer"] == "B"
 
 
+def test_question_submit_supports_order_independent_multiple_answers(monkeypatch) -> None:
+    seen = {}
+    monkeypatch.setattr(
+        api,
+        "_find_question_by_id",
+        lambda question_id: {
+            "id": question_id,
+            "type": "multiple_choice",
+            "answer": "A、C",
+            "subject": "数据结构",
+            "options": ["A. 甲", "B. 乙", "C. 丙", "D. 丁"],
+            "content": "多选题",
+        },
+    )
+    monkeypatch.setattr(api, "record_answer", lambda _data_dir, payload: seen.update(payload) or {"success": True})
+
+    result = api.submit_question_bank_answer(
+        {"question_id": "multi-1", "selected_option": "CA"},
+        user="alice",
+    )
+
+    assert result["is_correct"] is True
+    assert result["selected_option"] == "AC"
+    assert result["correct_answer"] == "AC"
+    assert seen["selected_option"] == "AC"
+
+
+def test_study_plan_material_restores_saved_answers_before_check_in(monkeypatch) -> None:
+    plan = {
+        "weekly": [{"tasks": [{
+            "id": "plan-task-1",
+            "question_ids": ["q1", "q2"],
+            "knowledge_point_ids": [],
+            "status": "pending",
+        }]}]
+    }
+    state = {
+        "answer_records": [
+            {
+                "question_id": "q1",
+                "selected_option": "B",
+                "correct_answer": "B",
+                "is_correct": True,
+                "source": "study_plan:plan-task-1",
+                "created_at": "2026-08-11T10:00:00",
+            },
+            {
+                "question_id": "q2",
+                "selected_option": "A",
+                "correct_answer": "C",
+                "is_correct": False,
+                "source": "question_bank",
+            },
+        ]
+    }
+    monkeypatch.setattr(api, "_current_study_plan", lambda user: (plan, state))
+    monkeypatch.setattr(
+        api,
+        "answer_records_for_source",
+        lambda _data_dir, _user, source, fallback_records=None: [
+            record for record in (fallback_records or []) if record.get("source") == source
+        ],
+    )
+    monkeypatch.setattr(api, "_load_knowledge_points", lambda: [])
+    monkeypatch.setattr(api, "_load_questions_cached", lambda: [
+        {"id": "q1", "content": "题一", "options": ["A. 错", "B. 对"], "explanation": "解析一"},
+        {"id": "q2", "content": "题二", "options": ["A. 错", "C. 对"], "explanation": "解析二"},
+    ])
+
+    result = api.study_plan_task_material("plan-task-1", user="alice")
+
+    assert result["questions"][0]["attempt"] == {
+        "selected_option": "B",
+        "correct_answer": "B",
+        "is_correct": True,
+        "created_at": "2026-08-11T10:00:00",
+        "explanation": "解析一",
+    }
+    assert "attempt" not in result["questions"][1]
+
+
+def test_question_catalog_filters_all_subjects_and_knowledge_points(monkeypatch) -> None:
+    questions = [
+        {"id": "ds-1", "subject": "数据结构", "year": "2025", "knowledge_points": ["线性表"]},
+        {"id": "os-1", "subject": "操作系统", "year": "2025", "knowledge_points": ["进程调度"]},
+        {"id": "os-2", "subject": "操作系统", "year": "2024", "knowledge_points": ["页面置换"]},
+    ]
+    monkeypatch.setattr(api, "_load_questions_cached", lambda: questions)
+    monkeypatch.setattr(api, "visualization_capability", lambda _question: None)
+
+    all_result = api.get_questions_paged(
+        page=1, page_size=50, subject="all", knowledge_point="all", year="all",
+        status="all", favorite_ids=None, user_id="ignored", user="alice",
+    )
+    os_result = api.get_questions_paged(
+        page=1, page_size=50, subject="操作系统", knowledge_point="进程调度", year="all",
+        status="all", favorite_ids=None, user_id="ignored", user="alice",
+    )
+
+    assert all_result["total"] == 3
+    assert [item["id"] for item in os_result["items"]] == ["os-1"]
+    assert os_result["filter_options"]["knowledge_points"] == [
+        {"title": "进程调度", "count": 1},
+        {"title": "页面置换", "count": 1},
+    ]
+
+
 def test_question_submit_ignores_client_answer_and_metadata(monkeypatch) -> None:
     seen = {}
     monkeypatch.setattr(

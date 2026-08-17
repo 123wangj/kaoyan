@@ -1,4 +1,5 @@
 import json
+from datetime import date, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -16,6 +17,39 @@ def _disable_postgres(monkeypatch) -> None:
     monkeypatch.setattr(
         learning.db_store, "get_daily_task_completions", lambda *args, **kwargs: {}
     )
+
+
+def test_yesterday_review_deduplicates_and_prioritizes_wrong_answers() -> None:
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    state = {
+        "answer_records": [
+            {"question_id": "q1", "is_correct": True, "created_at": yesterday + "T09:00:00"},
+            {"question_id": "q1", "is_correct": True, "created_at": yesterday + "T10:00:00"},
+            {"question_id": "q2", "is_correct": False, "created_at": yesterday + "T11:00:00"},
+            {"question_id": "q3", "is_correct": False, "created_at": date.today().isoformat() + "T08:00:00"},
+        ]
+    }
+    questions = [
+        {"id": "q1", "content": "做对的题"},
+        {"id": "q2", "content": "做错的题"},
+        {"id": "q3", "content": "今天的题"},
+    ]
+
+    items = learning.yesterday_review_items(state, questions)
+
+    assert [item["question_id"] for item in items] == ["q2", "q1"]
+    assert items[0]["was_wrong"] is True
+
+
+def test_daily_question_goal_updates_mixed_practice(tmp_path: Path, monkeypatch) -> None:
+    _disable_postgres(monkeypatch)
+    learning.set_daily_question_goal(tmp_path, "alice", 12)
+
+    tasks = learning.today_tasks(tmp_path, "alice")["tasks"]
+    mixed = next(task for task in tasks if task["id"] == "mixed-practice")
+
+    assert mixed["target_count"] == 12
+    assert "12 道" in mixed["title"]
 
 
 def test_record_answer_creates_user_directory_and_updates_daily_tasks(

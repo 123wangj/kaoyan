@@ -1,9 +1,10 @@
 // 全局状态
 const state = {
   allQuestions: [],
-  currentSubject: '数据结构',
+  currentSubject: 'all',
   filters: {
     subject: 'all',
+    knowledgePoint: 'all',
     type: 'all',
     year: 'all',
     status: 'all'
@@ -23,6 +24,9 @@ const state = {
   noteTool: 'pen',
   noteToolSizes: { pen: 4, eraser: 18 },
   noteDirty: false,
+  dailyGoal: 5,
+  rollingReviewItems: [],
+  profileAssessment: { current: null, answers: {}, index: 0, startedAt: 0 },
   pagination: {
     page: 1,
     pageSize: 36,
@@ -33,7 +37,8 @@ const state = {
   catalog: {
     total: 0,
     years: [],
-    subjectCounts: {}
+    subjectCounts: {},
+    knowledgePoints: []
   },
   userData: {
     favorites: {},
@@ -88,8 +93,8 @@ async function loadExamHome() {
     const items = data.items || [];
     root.innerHTML = `
       <section class="exam-hero-card">
-        <div><span class="exam-kicker">408 · 四科均衡</span><h2>生成一份 50 题模拟试卷</h2>
-          <p>每科约 12–13 题，可抽到做过或未做过的题。提交后自动评分，并结合题库画像生成薄弱点报告。</p></div>
+        <div><span class="exam-kicker">408 · 真题结构</span><h2>生成一份 40 题模拟试卷</h2>
+          <p>数据结构 11 题、计组 11 题、操作系统 10 题、计网 8 题，按真实卷面顺序出题。提交后自动评分并生成薄弱点报告。</p></div>
         <button class="exam-primary" type="button" onclick="createBalancedExam(this)">开始组卷</button>
       </section>
       <section class="exam-archive">
@@ -110,7 +115,7 @@ async function createBalancedExam(button) {
   button.disabled = true;
   button.textContent = '正在均衡抽题...';
   try {
-    const response = await fetch('/exams', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question_count: 50 }) });
+    const response = await fetch('/exams', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question_count: 40 }) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || '组卷失败');
     renderExam(data);
@@ -295,7 +300,7 @@ const _getRequestInflight = new Map();
 const _getRequestCache = new Map();
 const _GET_CACHE_TTL_MS = 1800;
 // 需鉴权的接口(本应用所有受保护端点)
-const _PROTECTED_PREFIX = /^\/(api|chat|question-bank|wrong-book|user|mastery|memory-review|daily-tasks|daily-push|study-plan|school-selection|exams|kg|rag)\b/;
+const _PROTECTED_PREFIX = /^\/(api|chat|question-bank|wrong-book|user|mastery|memory-review|daily-tasks|daily-push|daily-review|study-plan|school-selection|exams|kg|rag)\b/;
 const _PUBLIC_API = /\/api\/auth\/(login|register|verify)\b/;
 window.fetch = async function (input, init) {
   init = init || {};
@@ -389,11 +394,12 @@ function updateFavoriteBtnState(questionId) {
 }
 
 function recordAnswer(questionId, selectedOption, correctAnswer) {
-  const normalizedCorrect = correctAnswer ? correctAnswer.trim().charAt(0).toUpperCase() : '';
-  const isCorrect = selectedOption === normalizedCorrect;
+  const normalizedSelected = normalizeAnswerLetters(selectedOption);
+  const normalizedCorrect = normalizeAnswerLetters(correctAnswer);
+  const isCorrect = normalizedSelected === normalizedCorrect;
   state.userData.answerRecords[questionId] = {
     status: isCorrect ? 'correct' : 'wrong',
-    selectedOption: selectedOption,
+    selectedOption: normalizedSelected,
     correctAnswer: normalizedCorrect,
     timestamp: Date.now()
   };
@@ -410,8 +416,25 @@ function getQuestionDisplayYear(question) {
   return question.year || extractYearFromContent(question.content) || '练习题';
 }
 
-function getQuestionTypeLabel(type) {
-  return type === 'choice' ? '选择题' : '大题';
+function normalizeAnswerLetters(value) {
+  const matches = String(value || '').toUpperCase().match(/[A-D]/g) || [];
+  return [...new Set(matches)].sort().join('');
+}
+
+function isMultipleChoiceQuestion(question) {
+  const type = String(question?.type || '').toLowerCase();
+  return ['multiple_choice', 'multi_choice', 'multiple', '多选', '多选题'].includes(type)
+    || question?.multiple === true
+    || normalizeAnswerLetters(question?.answer || question?.correct_answer).length > 1;
+}
+
+function isChoiceQuestion(question) {
+  return Array.isArray(question?.options) && question.options.length > 0;
+}
+
+function getQuestionTypeLabel(question) {
+  if (isMultipleChoiceQuestion(question)) return '多选题';
+  return isChoiceQuestion(question) ? '单选题' : '大题';
 }
 
 function formatProgressPercent(value) {
@@ -435,6 +458,75 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 异步刷 dashboard 周边
   renderDashboardNotice();
   renderDashboardTutors();
+  maybeShowProfileAssessmentReminder();
+});
+
+const PROFILE_ASSESSMENT_REMINDER_INTERVAL_MS = 3 * 24 * 60 * 60 * 1000;
+
+function profileAssessmentReminderKey() {
+  const token = getToken();
+  return `kaoyan_profile_assessment_reminder:${token ? token.slice(-24) : 'anonymous'}`;
+}
+
+function dismissProfileAssessmentReminder() {
+  try {
+    localStorage.setItem(profileAssessmentReminderKey(), String(Date.now()));
+  } catch (_) {}
+  document.getElementById('profileAssessmentReminder')?.remove();
+  document.body.classList.remove('profile-assessment-reminder-open');
+}
+
+async function maybeShowProfileAssessmentReminder() {
+  try {
+    const response = await fetch('/user/profile-assessment/status', { cache: 'no-store' });
+    if (!response.ok) return;
+    const assessment = await response.json();
+    const reminderKey = profileAssessmentReminderKey();
+    if (assessment.has_completed || assessment.available === false) {
+      try { localStorage.removeItem(reminderKey); } catch (_) {}
+      return;
+    }
+    const lastShownAt = Number(localStorage.getItem(reminderKey) || 0);
+    if (Date.now() - lastShownAt < PROFILE_ASSESSMENT_REMINDER_INTERVAL_MS) return;
+
+    // Showing the prompt starts the cooldown as well, so refreshes never create repeated interruptions.
+    try { localStorage.setItem(reminderKey, String(Date.now())); } catch (_) {}
+    const modal = document.createElement('div');
+    modal.id = 'profileAssessmentReminder';
+    modal.className = 'profile-assessment-reminder';
+    modal.innerHTML = `
+      <div class="profile-assessment-reminder-backdrop" data-profile-reminder-dismiss></div>
+      <section class="profile-assessment-reminder-dialog" role="dialog" aria-modal="true" aria-labelledby="profileAssessmentReminderTitle">
+        <button type="button" class="profile-assessment-reminder-close" data-profile-reminder-dismiss aria-label="三天后提醒">×</button>
+        <span class="profile-assessment-reminder-kicker">40 题 · 四科快速诊断</span>
+        <h2 id="profileAssessmentReminderTitle">先让系统更准确地认识你</h2>
+        <p>${assessment.in_progress
+          ? '你的快速学习画像还没有完成，之前的进度已经保留。继续完成后，所有个性化分析都会更贴合你的真实水平。'
+          : '完成一次快速学习画像后，每日补给、学习计划、薄弱点分析和其他个性化建议都会更准确。'}</p>
+        <div class="profile-assessment-reminder-benefits"><span>四科均衡覆盖</span><span>约 25–35 分钟</span><span>作答自动保存</span></div>
+        <div class="profile-assessment-reminder-actions">
+          <button type="button" class="secondary" data-profile-reminder-dismiss>暂不，三天后提醒</button>
+          <button type="button" class="primary" data-profile-reminder-start>${assessment.in_progress ? '继续完成画像' : '开始快速画像'}</button>
+        </div>
+      </section>`;
+    document.body.appendChild(modal);
+    document.body.classList.add('profile-assessment-reminder-open');
+    modal.querySelectorAll('[data-profile-reminder-dismiss]').forEach(button => {
+      button.addEventListener('click', dismissProfileAssessmentReminder);
+    });
+    modal.querySelector('[data-profile-reminder-start]')?.addEventListener('click', async () => {
+      dismissProfileAssessmentReminder();
+      switchView('profile');
+      await loadProfile();
+      document.getElementById('startProfileAssessmentBtn')?.click();
+    });
+  } catch (_) {}
+}
+
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && document.getElementById('profileAssessmentReminder')) {
+    dismissProfileAssessmentReminder();
+  }
 });
 
 let _activityHeatmapPromise = null;
@@ -457,6 +549,8 @@ async function loadWelcomeName() {
       const data = await r.json();
       if (data && (data.user_id || data.username)) {
         el.textContent = data.username || data.user_id;
+        const sidebarName = document.getElementById('sidebarUserName');
+        if (sidebarName) sidebarName.textContent = data.nickname || data.username || data.user_id;
       }
     }
   } catch (e) { /* 静默 */ }
@@ -500,7 +594,8 @@ async function loadQuestions(page = 1) {
     const params = new URLSearchParams({
       page: String(Math.max(1, page)),
       page_size: String(state.pagination.pageSize),
-      subject: state.filters.subject !== 'all' ? state.filters.subject : state.currentSubject,
+      subject: state.filters.subject,
+      knowledge_point: state.filters.knowledgePoint,
       year: state.filters.year,
       status: state.filters.status
     });
@@ -519,7 +614,9 @@ async function loadQuestions(page = 1) {
     state.catalog.total = Number(options.catalog_total || state.pagination.total);
     state.catalog.years = Array.isArray(options.years) ? options.years : [];
     state.catalog.subjectCounts = options.subject_counts || {};
+    state.catalog.knowledgePoints = Array.isArray(options.knowledge_points) ? options.knowledge_points : [];
     populateYearFilter();
+    populateKnowledgePointFilter();
     renderQuestions();
     renderDashboard();
   } catch (error) {
@@ -604,6 +701,90 @@ function renderDashboard() {
 
   renderSubjectsProgress(subjects, subjectCounts, total, state.backendSubjectStats);
   renderCalendarGrid();
+  renderDashboardWrongBook();
+}
+
+// 题库总览 · 错题本(原位于「个人中心」，现迁移至此处)
+async function renderDashboardWrongBook() {
+  const listEl = document.getElementById('dashWrongBookList');
+  if (!listEl) return;
+  const filterEl = document.getElementById('dashWrongBookSubjectFilter');
+  const reviewBtn = document.getElementById('dashStartReviewBtn');
+
+  let wrongBookItems = [];
+  try {
+    const resp = await fetch('/wrong-book?status=open', { cache: 'no-store' });
+    if (resp.ok) wrongBookItems = await resp.json();
+  } catch (error) {
+    console.warn('错题本加载失败', error);
+    listEl.innerHTML = '<p class="notice-empty">错题本加载失败，请稍后重试。</p>';
+    return;
+  }
+  if (!Array.isArray(wrongBookItems)) wrongBookItems = [];
+
+  const subjects = ['数据结构', '计算机组成原理', '操作系统', '计算机网络'];
+  const wrongBySubject = {};
+  subjects.forEach(s => wrongBySubject[s] = []);
+  wrongBookItems.forEach(it => {
+    const s = it.subject || '其他';
+    if (!wrongBySubject[s]) wrongBySubject[s] = [];
+    wrongBySubject[s].push(it);
+  });
+
+  if (filterEl) {
+    filterEl.innerHTML = ['<option value="all">全部学科 ( ' + wrongBookItems.length + ' )</option>']
+      .concat(subjects.filter(s => wrongBySubject[s].length).map(s => `<option value="${s}">${s} ( ${wrongBySubject[s].length} )</option>`))
+      .join('');
+  }
+  if (reviewBtn) {
+    if (wrongBookItems.length > 0) {
+      reviewBtn.textContent = `开始错题复习模式 (${wrongBookItems.length} 题待复习)`;
+      reviewBtn.style.display = 'inline-block';
+    } else {
+      reviewBtn.style.display = 'none';
+    }
+  }
+
+  const renderWrongList = (list) => list.length
+    ? list.slice(0, 8).map(item => `
+      <div class="weak-point-item" style="align-items:flex-start;gap:12px;">
+        <div style="flex:1;min-width:0;">
+          <div class="weak-point-name">${escapeHtml(item.subject || '')} · ${escapeHtml((item.knowledge_points || []).join('、'))}</div>
+          <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">${escapeHtml((item.content || item.question_id || '').slice(0, 120))}${(item.content || '').length > 120 ? '...' : ''}</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">错因：${escapeHtml(item.error_reason || '概念不清')} · 错 ${item.wrong_count || 1} 次 · 复盘 ${item.review_count || 0} 次</div>
+        </div>
+        <button class="wrong-review-btn" data-question-id="${escapeHtml(item.question_id)}" style="border:0;border-radius:8px;padding:7px 10px;background:var(--primary);color:#fff;cursor:pointer;">标记已掌握</button>
+      </div>
+    `).join('')
+    : '<p style="color: var(--text-secondary)">该学科暂无错题。</p>';
+
+  const bindResolveButtons = () => {
+    listEl.querySelectorAll('.wrong-review-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await fetch('/wrong-book/' + encodeURIComponent(btn.dataset.questionId) + '/review', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ result: 'resolved' })
+        });
+        renderDashboardWrongBook();
+      });
+    });
+  };
+
+  listEl.innerHTML = wrongBookItems.length ? renderWrongList(wrongBookItems) : '<p style="color: var(--text-secondary)">暂无未解决错题。</p>';
+  bindResolveButtons();
+
+  if (reviewBtn) {
+    reviewBtn.onclick = startWrongBookReview;
+  }
+  if (filterEl) {
+    filterEl.onchange = () => {
+      const val = filterEl.value;
+      const list = val === 'all' ? wrongBookItems : (wrongBySubject[val] || []);
+      listEl.innerHTML = renderWrongList(list);
+      bindResolveButtons();
+    };
+  }
 }
 
 function renderSubjectsProgress(subjects, subjectCounts, total, backendSubjectStats) {
@@ -679,6 +860,20 @@ async function renderDashboardNotice() {
   const list = document.getElementById('noticeList');
   if (!list) return;
   const notices = [];
+  await loadDailyGoal();
+  try {
+    const response = await fetch('/user/profile-assessment/status', { cache: 'no-store' });
+    if (response.ok) {
+      const assessment = await response.json();
+      if (!assessment.has_completed) {
+        notices.push({
+          tag: '画像', cls: 'notice-tag-yellow',
+          text: assessment.in_progress ? '40 题快速画像尚未完成，继续作答即可保留进度' : '新用户建议先完成 40 题快速画像，让所有推荐更准确',
+          time: assessment.in_progress ? '继续' : '开始', action: 'profile-assessment',
+        });
+      }
+    }
+  } catch (_) {}
   const records = state.userData.answerRecords || {};
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -696,7 +891,7 @@ async function renderDashboardNotice() {
   // 1) 今日目标
   notices.push({
     tag: '今日', cls: 'notice-tag-blue',
-    text: todayCount >= 5 ? `今日已刷 ${todayCount} 题,完成每日目标` : `今日已刷 ${todayCount}/5 题,继续推进`,
+    text: todayCount >= state.dailyGoal ? `今日已刷 ${todayCount} 题，完成每日目标` : `今日已刷 ${todayCount}/${state.dailyGoal} 题，继续推进`,
     time: '现在',
   });
 
@@ -771,12 +966,83 @@ async function renderDashboardNotice() {
     return;
   }
   list.innerHTML = notices.slice(0, 4).map(n => `
-    <div class="notice-item">
+    <${n.action ? 'button type="button"' : 'div'} class="notice-item${n.action ? ' is-action' : ''}" ${n.action ? `data-notice-action="${n.action}"` : ''}>
       <span class="notice-tag ${n.cls}">${escapeHtml(n.tag)}</span>
       <span class="notice-text">${escapeHtml(n.text)}</span>
       <span class="notice-time">${escapeHtml(n.time)}</span>
-    </div>
+    </${n.action ? 'button' : 'div'}>
   `).join('');
+  list.querySelector('[data-notice-action="profile-assessment"]')?.addEventListener('click', async () => {
+    switchView('profile');
+    await loadProfile();
+    document.getElementById('startProfileAssessmentBtn')?.click();
+  });
+  renderRollingReview();
+}
+
+async function loadDailyGoal() {
+  try {
+    const response = await fetch('/user/preferences/daily-goal');
+    if (response.ok) {
+      const data = await response.json();
+      state.dailyGoal = Math.max(1, Math.min(100, Number(data.daily_question_goal) || 5));
+    }
+  } catch (_) {}
+  const input = document.getElementById('dailyGoalInput');
+  const calendarGoal = document.getElementById('calGoal');
+  if (input) input.value = String(state.dailyGoal);
+  if (calendarGoal) calendarGoal.textContent = String(state.dailyGoal);
+}
+
+async function saveDailyGoal() {
+  const input = document.getElementById('dailyGoalInput');
+  const button = document.getElementById('saveDailyGoalBtn');
+  const value = Math.max(1, Math.min(100, Number(input?.value) || 5));
+  if (input) input.value = String(value);
+  if (button) { button.disabled = true; button.textContent = '保存中'; }
+  try {
+    const response = await fetch('/user/preferences/daily-goal', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ daily_question_goal: value })
+    });
+    if (!response.ok) throw new Error('保存失败');
+    state.dailyGoal = value;
+    await renderDashboardNotice();
+    loadDailyTasks().catch(() => {});
+  } catch (error) {
+    alert(error.message || '每日题量保存失败');
+  } finally {
+    if (button) { button.disabled = false; button.textContent = '保存'; }
+  }
+}
+
+async function renderRollingReview() {
+  const panel = document.getElementById('rollingReviewPanel');
+  if (!panel) return;
+  try {
+    const response = await fetch('/daily-review/yesterday?limit=5');
+    const data = response.ok ? await response.json() : { items: [] };
+    state.rollingReviewItems = data.items || [];
+    if (!state.rollingReviewItems.length) {
+      panel.innerHTML = '<div class="rolling-review-empty">昨日暂无做题记录，今天完成后明日会自动进入滚动复盘。</div>';
+      return;
+    }
+    panel.innerHTML = `
+      <div class="rolling-review-head"><b>昨日滚动复盘</b><span>错题优先 · 已自动去重</span></div>
+      <div class="rolling-review-list">${state.rollingReviewItems.map(item => `
+        <button type="button" data-review-question="${escapeHtml(item.question_id)}">
+          <span class="${item.was_wrong ? 'is-wrong' : 'is-done'}">${item.was_wrong ? '昨日错题' : '昨日做过'}</span>
+          <p>${escapeHtml(item.question?.content || '题目')}</p><b>${item.was_wrong ? '复盘错题去重做' : '再次复习'} →</b>
+        </button>`).join('')}</div>`;
+    panel.querySelectorAll('[data-review-question]').forEach(button => {
+      button.addEventListener('click', () => {
+        const item = state.rollingReviewItems.find(row => row.question_id === button.dataset.reviewQuestion);
+        if (item?.question) openQuestion(item.question);
+      });
+    });
+  } catch (_) {
+    panel.innerHTML = '<div class="rolling-review-empty">昨日复盘暂时加载失败，请稍后重试。</div>';
+  }
 }
 
 // 根据真实数据生成"AI 复盘建议"列表(原写死)
@@ -976,6 +1242,25 @@ function populateYearFilter() {
     : 'all';
 }
 
+function populateKnowledgePointFilter() {
+  const filter = document.getElementById('knowledgePointFilter');
+  if (!filter) return;
+  const selected = state.filters.knowledgePoint || 'all';
+  while (filter.options.length > 1) filter.remove(1);
+  (state.catalog.knowledgePoints || []).forEach(item => {
+    const title = typeof item === 'string' ? item : item.title;
+    const count = typeof item === 'string' ? null : item.count;
+    if (!title) return;
+    const option = document.createElement('option');
+    option.value = title;
+    option.textContent = count == null ? title : `${title}（${count}）`;
+    filter.appendChild(option);
+  });
+  const exists = Array.from(filter.options).some(option => option.value === selected);
+  if (!exists) state.filters.knowledgePoint = 'all';
+  filter.value = exists ? selected : 'all';
+}
+
 // 事件监听
 function initEventListeners() {
   // 导航切换
@@ -986,8 +1271,13 @@ function initEventListeners() {
   });
   
   // 用户信息点击
-  document.querySelector('.user-info').addEventListener('click', () => {
+  document.querySelector('.user-info')?.addEventListener('click', () => {
     switchView('profile');
+  });
+  document.getElementById('logoutBtn')?.addEventListener('click', logoutAccount);
+  document.getElementById('customerServiceBtn')?.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText('17635575899'); alert('客服微信已复制：17635575899\n客服电话：17635575899'); }
+    catch (_) { alert('客服电话/微信：17635575899'); }
   });
   
   document.querySelectorAll('.dash-tab[data-view]').forEach(tab => {
@@ -1008,7 +1298,9 @@ function initEventListeners() {
       tab.classList.add('active');
       state.currentSubject = tab.dataset.subject;
       state.filters.subject = tab.dataset.subject;
+      state.filters.knowledgePoint = 'all';
       document.getElementById('subjectFilter').value = tab.dataset.subject;
+      document.getElementById('knowledgePointFilter').value = 'all';
       loadQuestions(1);
     });
   });
@@ -1016,12 +1308,23 @@ function initEventListeners() {
   // 筛选器
   document.getElementById('subjectFilter').addEventListener('change', (e) => {
     state.filters.subject = e.target.value;
+    state.filters.knowledgePoint = 'all';
+    document.getElementById('knowledgePointFilter').value = 'all';
+    state.currentSubject = e.target.value;
     if (e.target.value !== 'all') {
-      state.currentSubject = e.target.value;
       document.querySelectorAll('.subject-tab').forEach(tab => {
         tab.classList.toggle('active', tab.dataset.subject === e.target.value);
       });
+    } else {
+      document.querySelectorAll('.subject-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.subject === 'all');
+      });
     }
+    loadQuestions(1);
+  });
+
+  document.getElementById('knowledgePointFilter').addEventListener('change', (e) => {
+    state.filters.knowledgePoint = e.target.value;
     loadQuestions(1);
   });
   
@@ -1062,7 +1365,9 @@ function initEventListeners() {
   document.getElementById('modalOverlay').addEventListener('click', closeModal);
   
   document.getElementById('showAnswerBtn').addEventListener('click', showAnswer);
+  document.getElementById('prevQuestionBtn').addEventListener('click', openPreviousQuestion);
   document.getElementById('nextQuestionBtn').addEventListener('click', openNextQuestion);
+  document.getElementById('saveDailyGoalBtn')?.addEventListener('click', saveDailyGoal);
   document.getElementById('questionPrevPage')?.addEventListener('click', () => {
     if (state.pagination.page > 1) loadQuestions(state.pagination.page - 1);
   });
@@ -1170,8 +1475,8 @@ function renderQuestions() {
     const isFav = isFavorited(question.id);
     const record = getAnswerRecord(question.id);
     
-    const typeTag = question.type === 'choice'
-      ? '<span class="question-tag type-choice">选择题</span>'
+    const typeTag = isChoiceQuestion(question)
+      ? `<span class="question-tag type-choice">${isMultipleChoiceQuestion(question) ? '多选题' : '单选题'}</span>`
       : '<span class="question-tag type-big">大题</span>';
     
     const yearTag = displayYear !== '练习题'
@@ -1298,7 +1603,7 @@ function openQuestion(question) {
   
   // 更新元数据
   document.getElementById('modalSubject').textContent = question.subject;
-  document.getElementById('modalType').textContent = getQuestionTypeLabel(question.type);
+  document.getElementById('modalType').textContent = getQuestionTypeLabel(question);
   document.getElementById('modalYear').textContent = getQuestionDisplayYear(question) + (getQuestionDisplayYear(question) !== '练习题' ? '年' : '');
   
   // 更新题目内容
@@ -1321,9 +1626,9 @@ function openQuestion(question) {
     }).join('');
     window.KaoyanRuntime.renderMath(optionsDiv);
     
-    if (question.type === 'choice') {
+    if (isChoiceQuestion(question)) {
       optionsDiv.innerHTML += `
-        <button class="submit-answer-btn" id="submitAnswerBtn" disabled>请先选择一个选项</button>
+        <button class="submit-answer-btn" id="submitAnswerBtn" disabled>${isMultipleChoiceQuestion(question) ? '可选择多个选项，选完后提交' : '请先选择一个选项'}</button>
         <div id="answerFeedback" style="display:none;"></div>
       `;
     }
@@ -1363,22 +1668,28 @@ function openQuestion(question) {
 // 选择选项
 function selectOption(optionLabel) {
   if (state.answerSubmitted) return;
-  
-  state.selectedOption = optionLabel;
+  const multiple = isMultipleChoiceQuestion(state.currentQuestion);
+  const current = new Set(normalizeAnswerLetters(state.selectedOption).split('').filter(Boolean));
+  if (multiple) {
+    if (current.has(optionLabel)) current.delete(optionLabel);
+    else current.add(optionLabel);
+    state.selectedOption = [...current].sort().join('');
+  } else {
+    state.selectedOption = optionLabel;
+  }
   
   // 更新选项样式
   document.querySelectorAll('#modalOptions .option-item').forEach(item => {
-    item.classList.remove('selected');
-    if (item.dataset.option === optionLabel) {
-      item.classList.add('selected');
-    }
+    item.classList.toggle('selected', normalizeAnswerLetters(state.selectedOption).includes(item.dataset.option));
   });
   
   // 更新提交按钮
   const submitBtn = document.getElementById('submitAnswerBtn');
   if (submitBtn) {
-    submitBtn.disabled = false;
-    submitBtn.textContent = '确认提交';
+    submitBtn.disabled = !state.selectedOption;
+    submitBtn.textContent = multiple && state.selectedOption
+      ? `已选 ${state.selectedOption.split('').join('、')}，确认提交`
+      : '确认提交';
   }
 }
 
@@ -1406,8 +1717,8 @@ function submitAnswer() {
   
   if (correctAnswer && correctAnswer.trim()) {
     // 有答案时可以判断对错
-    const userAnswer = state.selectedOption;
-    const normalizedCorrect = correctAnswer.trim().charAt(0).toUpperCase();
+    const userAnswer = normalizeAnswerLetters(state.selectedOption);
+    const normalizedCorrect = normalizeAnswerLetters(correctAnswer);
     const isCorrect = userAnswer === normalizedCorrect;
     
     // 记录答题结果
@@ -1416,10 +1727,10 @@ function submitAnswer() {
     
     // 高亮正确和错误选项
     document.querySelectorAll('#modalOptions .option-item').forEach(item => {
-      if (item.dataset.option === normalizedCorrect) {
+      if (normalizedCorrect.includes(item.dataset.option)) {
         item.classList.add('correct');
       }
-      if (item.dataset.option === userAnswer && !isCorrect) {
+      if (userAnswer.includes(item.dataset.option) && !normalizedCorrect.includes(item.dataset.option)) {
         item.classList.add('incorrect');
       }
     });
@@ -1507,15 +1818,56 @@ function getQuestionSequenceFromGrid() {
 
 function updateNextQuestionButton() {
   const button = document.getElementById('nextQuestionBtn');
-  if (!button || !state.currentQuestion) return;
+  const previousButton = document.getElementById('prevQuestionBtn');
+  if ((!button && !previousButton) || !state.currentQuestion) return;
   const sequence = getQuestionSequenceFromGrid();
   const index = sequence.findIndex(question => question.id === state.currentQuestion.id);
   const hasNext = (index >= 0 && index < sequence.length - 1)
     || state.pagination.page < state.pagination.totalPages;
-  button.disabled = !hasNext;
-  button.innerHTML = hasNext
-    ? '下一题 <span aria-hidden="true">→</span>'
-    : '已到最后一题';
+  const hasPrevious = index > 0 || state.pagination.page > 1;
+  if (button) {
+    button.disabled = !hasNext;
+    button.innerHTML = hasNext
+      ? '下一题 <span aria-hidden="true">→</span>'
+      : '已到最后一题';
+  }
+  if (previousButton) {
+    previousButton.disabled = !hasPrevious;
+    previousButton.innerHTML = hasPrevious
+      ? '<span aria-hidden="true">←</span> 上一题'
+      : '已到第一题';
+  }
+}
+
+async function openPreviousQuestion() {
+  const current = state.currentQuestion;
+  if (!current) return;
+  const sequence = getQuestionSequenceFromGrid();
+  const index = sequence.findIndex(question => question.id === current.id);
+  if (index < 0) {
+    updateNextQuestionButton();
+    return;
+  }
+  const button = document.getElementById('prevQuestionBtn');
+  if (button) button.disabled = true;
+  if (state.noteDirty) {
+    const saved = await saveCurrentQuestionNote();
+    if (!saved) {
+      updateNextQuestionButton();
+      return;
+    }
+  }
+  closeQuestionNote(false);
+  if (index > 0) {
+    openQuestion(sequence[index - 1]);
+    return;
+  }
+  if (state.pagination.page > 1) {
+    await loadQuestions(state.pagination.page - 1);
+    const previousSequence = getQuestionSequenceFromGrid();
+    if (previousSequence.length) openQuestion(previousSequence[previousSequence.length - 1]);
+    else updateNextQuestionButton();
+  }
 }
 
 async function openNextQuestion() {
@@ -1723,7 +2075,10 @@ function initQuestionNotes() {
   }
   window.addEventListener('resize', () => {
     const panel = document.getElementById('questionNotePanel');
-    if (panel && panel.classList.contains('is-open')) resizeNoteCanvas();
+    if (panel && panel.classList.contains('is-open')) {
+      positionQuestionNotePanel(panel);
+      resizeNoteCanvas();
+    }
   });
   document.addEventListener('keydown', event => {
     const panel = document.getElementById('questionNotePanel');
@@ -1742,8 +2097,10 @@ function setNoteTool(tool) {
 
 function openQuestionNote() {
   const panel = document.getElementById('questionNotePanel');
+  positionQuestionNotePanel(panel);
   panel.classList.add('is-open');
   panel.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('note-panel-open');
   requestAnimationFrame(() => requestAnimationFrame(resizeNoteCanvas));
   if (window.matchMedia('(pointer: fine)').matches) {
     document.getElementById('questionNoteText').focus();
@@ -1758,9 +2115,31 @@ function closeQuestionNote(saveChanges) {
   if (saveChanges && state.noteDirty) saveCurrentQuestionNote({ silent: true });
   panel.classList.remove('is-open', 'is-fullscreen');
   panel.setAttribute('aria-hidden', 'true');
-  document.body.classList.remove('note-fullscreen-open');
+  document.body.classList.remove('note-fullscreen-open', 'note-panel-open');
   const fullBtn = document.getElementById('noteFullscreenBtn');
   if (fullBtn) fullBtn.textContent = '⛶ 全屏';
+  restoreQuestionNotePanel(panel);
+}
+
+function positionQuestionNotePanel(panel) {
+  const useTabletWorkspace = window.matchMedia('(min-width: 701px) and (max-width: 1180px)').matches;
+  if (useTabletWorkspace && panel.parentElement !== document.body) {
+    panel._noteHomeParent = panel.parentElement;
+    panel._noteHomeNextSibling = panel.nextSibling;
+    document.body.appendChild(panel);
+  } else if (!useTabletWorkspace) {
+    restoreQuestionNotePanel(panel);
+  }
+}
+
+function restoreQuestionNotePanel(panel) {
+  const parent = panel?._noteHomeParent;
+  if (!parent) return;
+  const nextSibling = panel._noteHomeNextSibling;
+  if (nextSibling && nextSibling.parentElement === parent) parent.insertBefore(panel, nextSibling);
+  else parent.appendChild(panel);
+  panel._noteHomeParent = null;
+  panel._noteHomeNextSibling = null;
 }
 
 function toggleQuestionNoteFullscreen() {
@@ -1990,8 +2369,9 @@ function renderAnswerContent() {
     renderQuestionVisualization(question);
   } else if (state.activeAnswerTab === 'answer') {
     const answerText = question.answer || '暂无参考答案';
-    const answerLabel = (question.type === 'choice' && answerText.length === 1) 
-      ? `选项 ${answerText}` 
+    const normalizedAnswer = normalizeAnswerLetters(answerText);
+    const answerLabel = isChoiceQuestion(question) && normalizedAnswer
+      ? `选项 ${normalizedAnswer.split('').join('、')}`
       : answerText;
     
     contentDiv.innerHTML = `
@@ -2000,13 +2380,13 @@ function renderAnswerContent() {
     `;
     window.KaoyanRuntime.renderMathText(contentDiv.querySelector('.answer-latex'), answerLabel);
     
-    if (question.options && question.type === 'choice') {
-      const correctOpt = question.options.find(opt => opt.trim().charAt(0) === answerText.trim().charAt(0));
-      if (correctOpt) {
+    if (isChoiceQuestion(question) && normalizedAnswer) {
+      const correctOptions = question.options.filter(opt => normalizedAnswer.includes(opt.trim().charAt(0)));
+      if (correctOptions.length) {
         const option = document.createElement('p');
         option.style.color = 'var(--text-secondary)';
         contentDiv.appendChild(option);
-        window.KaoyanRuntime.renderMathText(option, correctOpt);
+        window.KaoyanRuntime.renderMathText(option, correctOptions.join('\n'));
       }
     }
   } else {
@@ -2030,7 +2410,7 @@ async function renderQuestionVisualization(question) {
     return;
   }
 
-  const normalizedCorrect = String(question.answer || '').trim().charAt(0).toUpperCase();
+  const normalizedCorrect = normalizeAnswerLetters(question.answer);
   const wrongOption = state.answerSubmitted && state.selectedOption !== normalizedCorrect ? state.selectedOption : '';
   const cacheKey = `${question.id}:${wrongOption || 'default'}`;
   let spec = state.visualizationCache[cacheKey];
@@ -2315,6 +2695,9 @@ async function sendMessage() {
           if (parsed.type === 'chunk') {
             fullText += parsed.content;
             scheduleStreamRender();
+          } else if (parsed.type === 'preparing') {
+            agentProgress = parsed.content || '正在读取上下文并匹配相关资料';
+            if (!fullText) shell.content.textContent = `${agentProgress}…`;
           } else if (parsed.type === 'plan_created') {
             const count = Array.isArray(parsed.plan) ? parsed.plan.length : 0;
             agentProgress = `正在规划 ${count || ''} 个执行步骤…`;
@@ -2876,8 +3259,8 @@ function loadDailyContent() {
         });
 
         questionsHtml += `
-          <div class="dp-question-card" data-qidx="${idx}">
-            <div class="dp-q-header">第${qNum}题（${escapeHtml(q.subject)}）</div>
+          <div class="dp-question-card" data-qidx="${idx}" data-multiple="${isMultipleChoiceQuestion(q) ? '1' : '0'}">
+            <div class="dp-q-header">第${qNum}题（${escapeHtml(q.subject)}）${isMultipleChoiceQuestion(q) ? ' · 多选' : ''}</div>
             <div class="dp-q-content">${escapeHtml(q.content)}</div>
             ${imageHtml}
             <div class="dp-options">${optionsHtml}</div>
@@ -2934,12 +3317,20 @@ function loadDailyContent() {
         el.addEventListener('click', function() {
           const qidx = this.dataset.qidx;
           const option = this.dataset.option;
-          contentDiv._selectedOptions[qidx] = option;
-
-          // 高亮选中
+          const card = this.closest('.dp-question-card');
           const parent = this.closest('.dp-options');
-          parent.querySelectorAll('.dp-option').forEach(o => o.classList.remove('selected'));
-          this.classList.add('selected');
+          if (card.dataset.multiple === '1') {
+            this.classList.toggle('selected');
+            const answer = normalizeAnswerLetters(
+              Array.from(parent.querySelectorAll('.dp-option.selected')).map(el => el.dataset.option).join('')
+            );
+            if (answer) contentDiv._selectedOptions[qidx] = answer;
+            else delete contentDiv._selectedOptions[qidx];
+          } else {
+            parent.querySelectorAll('.dp-option').forEach(o => o.classList.remove('selected'));
+            this.classList.add('selected');
+            contentDiv._selectedOptions[qidx] = option;
+          }
         });
       });
 
@@ -3151,8 +3542,8 @@ function renderTaskWorkspace(row, mat) {
           </div>
         ` : '';
         return `
-        <div class="dt-q" data-qid="${escapeHtml(q.id || '')}" data-qidx="${i}">
-          <div class="dt-q-head">第 ${i + 1} 题${q.subject ? `（${escapeHtml(q.subject)}）` : ''}</div>
+        <div class="dt-q" data-qid="${escapeHtml(q.id || '')}" data-qidx="${i}" data-multiple="${isMultipleChoiceQuestion(q) ? '1' : '0'}">
+          <div class="dt-q-head">第 ${i + 1} 题${q.subject ? `（${escapeHtml(q.subject)}）` : ''}${isMultipleChoiceQuestion(q) ? ' · 多选' : ''}</div>
           <div class="dt-q-content">${escapeHtml(q.content || '')}</div>
           ${imageHtml}
           <div class="dt-q-options">
@@ -3179,15 +3570,37 @@ function renderTaskWorkspace(row, mat) {
   `;
   window.KaoyanRuntime.renderMath(ws);
 
+  qs.forEach(q => {
+    if (!q.attempt) return;
+    const wrap = ws.querySelector(`.dt-q[data-qid="${CSS.escape(q.id || '')}"]`);
+    if (wrap) renderTaskQuestionAttempt(wrap, q.attempt);
+  });
+  const restoredAllAnswers = qs.length > 0 && qs.every(q => q.attempt);
+  if (restoredAllAnswers) {
+    ws.querySelector('.dt-qs').dataset.qsDone = '1';
+    const restoredSubmitButton = ws.querySelector('[data-action="submit-qs"]');
+    if (restoredSubmitButton) {
+      restoredSubmitButton.disabled = true;
+      restoredSubmitButton.textContent = '已批改并保存';
+    }
+  }
+
   // 选中
   ws.querySelectorAll('.dt-option').forEach(el => {
     el.addEventListener('click', () => {
       if (el.classList.contains('disabled') || ws.querySelector('.dt-qs')?.dataset.qsDone === '1') return;
       const qidx = el.dataset.qidx;
       const wrap = el.closest('.dt-q');
-      wrap.querySelectorAll('.dt-option').forEach(o => o.classList.remove('selected'));
-      el.classList.add('selected');
-      wrap.dataset.selected = el.dataset.option;
+      if (wrap.dataset.multiple === '1') {
+        el.classList.toggle('selected');
+        wrap.dataset.selected = normalizeAnswerLetters(
+          Array.from(wrap.querySelectorAll('.dt-option.selected')).map(option => option.dataset.option).join('')
+        );
+      } else {
+        wrap.querySelectorAll('.dt-option').forEach(o => o.classList.remove('selected'));
+        el.classList.add('selected');
+        wrap.dataset.selected = el.dataset.option;
+      }
       // 解锁提交按钮
       const allQ = ws.querySelectorAll('.dt-q');
       const allAnswered = Array.from(allQ).every(q => q.dataset.selected);
@@ -3211,6 +3624,10 @@ function renderTaskWorkspace(row, mat) {
     for (const q of qs) {
       const wrap = ws.querySelector(`.dt-q[data-qid="${CSS.escape(q.id || '')}"]`);
       if (!wrap) continue;
+      if (wrap.dataset.saved === '1') {
+        results.push({ id: q.id, is_correct: wrap.dataset.correct === '1' });
+        continue;
+      }
       const sel = wrap.dataset.selected || '';
       try {
         const r = await fetch('/question-bank/submit-answer', {
@@ -3226,40 +3643,66 @@ function renderTaskWorkspace(row, mat) {
             source: (row.dataset.taskScope === 'plan' ? 'study_plan:' : 'daily_task:') + taskId,
           })
         }).then(r => r.json());
-        const fb = wrap.querySelector('.dt-q-feedback');
-        fb.style.display = 'block';
-        const correctAnswer = (r.correct_answer || '').trim().charAt(0).toUpperCase();
+        const correctAnswer = normalizeAnswerLetters(r.correct_answer);
         const correct = Boolean(r.is_correct);
-        wrap.querySelectorAll('.dt-option').forEach(opt => {
-          opt.classList.add('disabled');
-          if (correctAnswer && opt.dataset.option === correctAnswer) opt.classList.add('correct');
-          if (!correct && opt.dataset.option === sel) opt.classList.add('incorrect');
+        renderTaskQuestionAttempt(wrap, {
+          selected_option: sel,
+          correct_answer: correctAnswer,
+          is_correct: correct,
+          explanation: r.explanation,
         });
-        const statusHtml = correct
-          ? '<span class="dt-feedback-ok">✓ 答对了</span>'
-          : '<span class="dt-feedback-bad">✗ 答案不正确，已记入错题本</span>';
-        const answerHtml = correctAnswer
-          ? `<div class="dt-answer-line"><strong>正确答案：</strong>${escapeHtml(correctAnswer)}</div>`
-          : '<div class="dt-answer-line"><strong>正确答案：</strong>题库暂未返回标准答案</div>';
-        const explanation = (r.explanation || '').trim();
-        fb.innerHTML = `
-          <div class="dt-feedback-result">${statusHtml}<span>你的选择：${escapeHtml(sel || '未选择')}</span></div>
-          ${answerHtml}
-          <div class="dt-explanation">
-            <strong>解析：</strong>
-            <div>${explanation ? escapeHtml(explanation).replace(/\n/g, '<br>') : '题库暂未返回解析，请稍后重试。'}</div>
-          </div>
-        `;
         results.push({ id: q.id, is_correct: correct });
       } catch (e) {
         console.warn('批改失败', e);
       }
     }
-    submitBtn.textContent = '已提交';
-    ws.querySelector('.dt-qs').dataset.qsDone = '1';
-    // 提交后只要勾了"已阅读" + 做完题,启用完成按钮
-    tryUnlockComplete(row);
+    if (results.length === qs.length) {
+      submitBtn.textContent = '已批改并保存';
+      ws.querySelector('.dt-qs').dataset.qsDone = '1';
+      // 批改成功即持久化；完成打卡只负责更新计划进度。
+      tryUnlockComplete(row);
+    } else {
+      submitBtn.disabled = false;
+      submitBtn.textContent = '部分保存失败，重试批改';
+    }
   });
+
+  if (restoredAllAnswers) tryUnlockComplete(row);
+}
+
+function renderTaskQuestionAttempt(wrap, attempt) {
+  const selected = normalizeAnswerLetters(attempt?.selected_option);
+  const correctAnswer = normalizeAnswerLetters(attempt?.correct_answer);
+  const correct = Boolean(attempt?.is_correct);
+  wrap.dataset.selected = selected;
+  wrap.dataset.saved = '1';
+  wrap.dataset.correct = correct ? '1' : '0';
+  wrap.querySelectorAll('.dt-option').forEach(opt => {
+    opt.classList.add('disabled');
+    opt.classList.toggle('selected', selected.includes(opt.dataset.option));
+    if (correctAnswer.includes(opt.dataset.option)) opt.classList.add('correct');
+    if (!correct && selected.includes(opt.dataset.option) && !correctAnswer.includes(opt.dataset.option)) {
+      opt.classList.add('incorrect');
+    }
+  });
+  const feedback = wrap.querySelector('.dt-q-feedback');
+  if (!feedback) return;
+  feedback.style.display = 'block';
+  const statusHtml = correct
+    ? '<span class="dt-feedback-ok">✓ 答对了</span>'
+    : '<span class="dt-feedback-bad">✗ 答案不正确，已记入错题本</span>';
+  const answerHtml = correctAnswer
+    ? `<div class="dt-answer-line"><strong>正确答案：</strong>${escapeHtml(correctAnswer)}</div>`
+    : '<div class="dt-answer-line"><strong>正确答案：</strong>题库暂未返回标准答案</div>';
+  const explanation = String(attempt?.explanation || '').trim();
+  feedback.innerHTML = `
+    <div class="dt-feedback-result">${statusHtml}<span>你的选择：${escapeHtml(selected || '未选择')}</span></div>
+    ${answerHtml}
+    <div class="dt-explanation">
+      <strong>解析：</strong>
+      <div>${explanation ? escapeHtml(explanation).replace(/\n/g, '<br>') : '题库暂未返回解析，请稍后重试。'}</div>
+    </div>
+  `;
 }
 
 function tryUnlockComplete(row) {
@@ -3300,8 +3743,8 @@ function submitDailyPushAnswers(container) {
   let resultHtml = '<h4>📊 作答结果</h4>';
 
   pushResult.questions.forEach((q, idx) => {
-    const userAns = selected[idx] || '';
-    const correctAns = q.answer.toUpperCase();
+    const userAns = normalizeAnswerLetters(selected[idx]);
+    const correctAns = normalizeAnswerLetters(q.answer);
     const isCorrect = userAns === correctAns;
 
     if (isCorrect) correctCount++;
@@ -3320,10 +3763,10 @@ function submitDailyPushAnswers(container) {
     const qCard = document.querySelector(`.dp-question-card[data-qidx="${idx}"]`);
     qCard.querySelectorAll('.dp-option').forEach(el => {
       el.classList.add('disabled');
-      if (el.dataset.option === correctAns) {
+      if (correctAns.includes(el.dataset.option)) {
         el.classList.add('correct');
       }
-      if (el.dataset.option === userAns && !isCorrect) {
+      if (userAns.includes(el.dataset.option) && !correctAns.includes(el.dataset.option)) {
         el.classList.add('incorrect');
       }
     });
@@ -3400,9 +3843,11 @@ function showDailyPushAnswers(container) {
 async function loadProfile() {
   try {
     // 学习概览必须与题库总览读取同一时刻、同一统计接口的数据，并绕过 HTTP 缓存。
-    const [response, overviewResponse] = await Promise.all([
+    const [response, overviewResponse, assessmentResponse, accountResponse] = await Promise.all([
       fetch('/user/profile', { cache: 'no-store' }),
       fetch('/user/stats/overview', { cache: 'no-store' }),
+      fetch('/user/profile-assessment/status', { cache: 'no-store' }),
+      fetch('/api/auth/account', { cache: 'no-store' }),
     ]);
     if (!response.ok) throw new Error('学习画像加载失败');
     const data = await response.json();
@@ -3413,6 +3858,10 @@ async function loadProfile() {
       data.answer_stats.correct_count = toNonNegativeNumber(overview.total_correct);
       data.answer_stats.accuracy = toNonNegativeNumber(overview.accuracy);
     }
+    data.profile_assessment = assessmentResponse.ok
+      ? await assessmentResponse.json()
+      : { question_count: 40, has_completed: false, in_progress: false };
+    data.account = accountResponse.ok ? await accountResponse.json() : {};
     // 基础数据先立即显示；AI 洞察较慢时不阻塞整个个人中心。
     renderProfile(data);
     try {
@@ -3433,6 +3882,37 @@ function renderProfile(data) {
   const profileDiv = document.getElementById('profileContent');
   
   const subjects = ['数据结构', '计算机组成原理', '操作系统', '计算机网络'];
+  const assessment = data.profile_assessment || {};
+  const assessmentResult = assessment.latest_result || {};
+  const account = data.account || {};
+  const accountCard = account.user_id ? `
+    <section class="account-security-card">
+      <div class="account-security-head">
+        <div><span>ACCOUNT & SECURITY</span><h3>账号与安全</h3><p>${escapeHtml(account.nickname || account.user_id)} · ${escapeHtml(account.user_id)}</p></div>
+        <div class="account-security-actions"><button type="button" id="openAccountSettingsBtn">管理账号</button><button type="button" class="secondary" id="profileLogoutBtn">退出账号</button></div>
+      </div>
+      <div class="account-security-grid">
+        <article><span>我的邀请码</span><strong>${escapeHtml(account.invite_code || '生成中')}</strong><button type="button" id="copyInviteCodeBtn">复制</button></article>
+        <article><span>手机号</span><strong>${account.phone_verified ? escapeHtml(account.phone_masked || '') : '未绑定'}</strong><small>用于登录 / 找回密码</small></article>
+        <article><span>微信号</span><strong>${escapeHtml(account.wechat_id || '未绑定')}</strong><small>用于客服沟通</small></article>
+        <article><span>客服</span><strong>17635575899</strong><small>电话与微信同号</small></article>
+      </div>
+    </section>` : '';
+  const assessmentCard = `
+    <section class="profile-assessment-card ${assessment.has_completed ? 'is-complete' : ''}">
+      <div class="profile-assessment-copy">
+        <span class="profile-assessment-kicker">QUICK PROFILE · 四科诊断</span>
+        <h3>${assessment.has_completed ? '学习画像已建立' : '用 40 题快速建立学习画像'}</h3>
+        <p>${assessment.has_completed
+          ? `最近测评正确率 ${Number(assessmentResult.accuracy || 0).toFixed(1)}%，系统会持续合并题库中的后续作答，动态更新所有个性化分析。`
+          : '四科各 10 题，覆盖不同章节与难度。完成后，每日补给、学习计划、薄弱点、择校适配等都会立即使用这份结果。'}</p>
+        <div class="profile-assessment-tags"><span>数据结构 10</span><span>组成原理 10</span><span>操作系统 10</span><span>计算机网络 10</span></div>
+      </div>
+      <div class="profile-assessment-action">
+        ${assessment.has_completed ? `<strong>${Number(assessmentResult.accuracy || 0).toFixed(1)}%</strong><small>${assessmentResult.correct_count || 0} / ${assessmentResult.question_count || 40} 正确</small>` : '<strong>40</strong><small>预计 25–35 分钟</small>'}
+        <button type="button" id="startProfileAssessmentBtn">${assessment.in_progress ? '继续测评' : assessment.has_completed ? '重新测评' : '开始快速画像'}</button>
+      </div>
+    </section>`;
   
   let weakPointsHtml = '';
   // 这里只展示真实知识点；诊断文案和各类统计不混入薄弱知识点清单。
@@ -3510,34 +3990,6 @@ function renderProfile(data) {
     `;
   }).join('');
 
-  const wrongBookItems = data.wrong_book || [];
-  // 按学科分组(用于错题本过滤)—— 复用上面声明的 subjects
-  const wrongBySubject = {};
-  subjects.forEach(s => wrongBySubject[s] = []);
-  wrongBookItems.forEach(it => {
-    const s = it.subject || '其他';
-    if (!wrongBySubject[s]) wrongBySubject[s] = [];
-    wrongBySubject[s].push(it);
-  });
-  const subjectOptionsHtml = ['<option value="all">全部学科 ( ' + wrongBookItems.length + ' )</option>']
-    .concat(subjects.filter(s => wrongBySubject[s].length).map(s => `<option value="${s}">${s} ( ${wrongBySubject[s].length} )</option>`))
-    .join('');
-  const renderWrongList = (list) => list.length
-    ? list.slice(0, 8).map(item => `
-      <div class="weak-point-item" style="align-items:flex-start;gap:12px;">
-        <div style="flex:1;min-width:0;">
-          <div class="weak-point-name">${escapeHtml(item.subject || '')} · ${escapeHtml((item.knowledge_points || []).join('、'))}</div>
-          <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;line-height:1.5;">${escapeHtml((item.content || item.question_id || '').slice(0, 120))}${(item.content || '').length > 120 ? '...' : ''}</div>
-          <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">错因：${escapeHtml(item.error_reason || '概念不清')} · 错 ${item.wrong_count || 1} 次 · 复盘 ${item.review_count || 0} 次</div>
-        </div>
-        <button class="wrong-review-btn" data-question-id="${escapeHtml(item.question_id)}" style="border:0;border-radius:8px;padding:7px 10px;background:var(--primary);color:#fff;cursor:pointer;">标记已掌握</button>
-      </div>
-    `).join('')
-    : '<p style="color: var(--text-secondary)">该学科暂无错题。</p>';
-  const wrongBookHtml = wrongBookItems.length
-    ? renderWrongList(wrongBookItems)
-    : '<p style="color: var(--text-secondary)">暂无未解决错题。</p>';
-
   const taskData = data.daily_tasks || { tasks: [] };
   const taskHtml = (taskData.tasks || []).map(task => `
     <div class="weak-point-item">
@@ -3548,6 +4000,8 @@ function renderProfile(data) {
   `).join('') || '<p style="color: var(--text-secondary)">暂无每日任务。</p>';
   
   profileDiv.innerHTML = `
+    ${accountCard}
+    ${assessmentCard}
     <div class="profile-section">
       <h3 class="profile-section-title">📊 学习概览</h3>
       <div class="stats-grid">
@@ -3585,18 +4039,6 @@ function renderProfile(data) {
     </div>
 
     <div class="profile-section">
-      <h3 class="profile-section-title">📝 正式错题本</h3>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
-        ${wrongBookItems.length > 0 ? '<button id="startReviewBtn" style="border:0;border-radius:10px;padding:10px 20px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;cursor:pointer;font-weight:600;font-size:14px;">开始错题复习模式 (' + wrongBookItems.length + ' 题待复习)</button>' : ''}
-        <select id="wrongBookSubjectFilter" class="filter-select" style="margin-left:auto;background:var(--bg-secondary);color:var(--text-primary);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;">${subjectOptionsHtml}</select>
-      </div>
-      <div class="weak-points" id="wrongBookList">
-        ${wrongBookHtml}
-      </div>
-      <div id="reviewSessionArea" style="display:none;"></div>
-    </div>
-
-    <div class="profile-section">
       <h3 class="profile-section-title">✅ 今日任务</h3>
       <div class="weak-points">
         ${taskHtml}
@@ -3618,16 +4060,15 @@ function renderProfile(data) {
     </div>
   `;
 
-  profileDiv.querySelectorAll('.wrong-review-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      await fetch('/wrong-book/' + encodeURIComponent(btn.dataset.questionId) + '/review', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ result: 'resolved' })
-      });
-      loadProfile();
-    });
+  document.getElementById('startProfileAssessmentBtn')?.addEventListener('click', () => {
+    startProfileAssessment(Boolean(assessment.has_completed && !assessment.in_progress));
   });
+  document.getElementById('copyInviteCodeBtn')?.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(account.invite_code || ''); alert('邀请码已复制'); }
+    catch (_) { alert(`你的邀请码：${account.invite_code || ''}`); }
+  });
+  document.getElementById('openAccountSettingsBtn')?.addEventListener('click', () => openAccountSettingsModal(account));
+  document.getElementById('profileLogoutBtn')?.addEventListener('click', logoutAccount);
 
   profileDiv.querySelectorAll('.profile-point-link').forEach(button => {
     button.addEventListener('click', () => {
@@ -3655,39 +4096,306 @@ function renderProfile(data) {
       await Promise.all([loadProfile(), loadDailyTasks()]);
     });
   });
+}
 
-  // 错题复习模式按钮
-  const startReviewBtn = document.getElementById('startReviewBtn');
-  if (startReviewBtn) {
-    startReviewBtn.addEventListener('click', startWrongBookReview);
-  }
+function profileAssessmentDraftKey(id) {
+  return `kaoyan_profile_assessment_${id}`;
+}
 
-  // 错题本按学科过滤
-  const wrongFilter = document.getElementById('wrongBookSubjectFilter');
-  const wrongListEl = document.getElementById('wrongBookList');
-  if (wrongFilter && wrongListEl) {
-    wrongFilter.addEventListener('change', () => {
-      const val = wrongFilter.value;
-      const list = val === 'all' ? wrongBookItems : (wrongBySubject[val] || []);
-      wrongListEl.innerHTML = renderWrongList(list);
-      // 重新绑定"标记已掌握"按钮
-      wrongListEl.querySelectorAll('.wrong-review-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          await fetch('/wrong-book/' + encodeURIComponent(btn.dataset.questionId) + '/review', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ result: 'resolved' })
-          });
-          loadProfile();
-        });
-      });
+function saveProfileAssessmentDraft() {
+  const current = state.profileAssessment.current;
+  if (!current) return;
+  try {
+    localStorage.setItem(profileAssessmentDraftKey(current.id), JSON.stringify({
+      answers: state.profileAssessment.answers,
+      index: state.profileAssessment.index,
+      startedAt: state.profileAssessment.startedAt,
+    }));
+  } catch (_) {}
+}
+
+async function startProfileAssessment(force = false) {
+  const button = document.getElementById('startProfileAssessmentBtn');
+  if (button) { button.disabled = true; button.textContent = '正在组卷…'; }
+  try {
+    const response = await fetch('/user/profile-assessment/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ force }),
     });
+    const assessment = await response.json();
+    if (!response.ok) throw new Error(assessment.detail || '画像测评生成失败');
+    state.profileAssessment.current = assessment;
+    state.profileAssessment.answers = {};
+    state.profileAssessment.index = 0;
+    state.profileAssessment.startedAt = Date.now();
+    try {
+      const draft = JSON.parse(localStorage.getItem(profileAssessmentDraftKey(assessment.id)) || 'null');
+      if (draft) {
+        state.profileAssessment.answers = draft.answers || {};
+        state.profileAssessment.index = Math.min(Number(draft.index || 0), assessment.questions.length - 1);
+        state.profileAssessment.startedAt = Number(draft.startedAt || Date.now());
+      }
+    } catch (_) {}
+    renderProfileAssessmentModal();
+  } catch (error) {
+    alert(error.message || '画像测评生成失败');
+    if (button) { button.disabled = false; button.textContent = '开始快速画像'; }
+  }
+}
+
+function renderProfileAssessmentModal() {
+  const assessment = state.profileAssessment.current;
+  if (!assessment?.questions?.length) return;
+  let modal = document.getElementById('profileAssessmentModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'profileAssessmentModal';
+    modal.className = 'profile-assessment-modal';
+    document.body.appendChild(modal);
+  }
+  const index = state.profileAssessment.index;
+  const question = assessment.questions[index];
+  const selected = normalizeAnswerLetters(state.profileAssessment.answers[question.id]);
+  const answered = Object.keys(state.profileAssessment.answers).filter(id => state.profileAssessment.answers[id]).length;
+  const multiple = isMultipleChoiceQuestion(question);
+  const images = question.images || [];
+  modal.innerHTML = `
+    <div class="profile-assessment-backdrop"></div>
+    <section class="profile-assessment-dialog" role="dialog" aria-modal="true" aria-label="快速学习画像测评">
+      <header class="profile-assessment-header">
+        <div><span>快速学习画像</span><strong>${index + 1} / ${assessment.questions.length}</strong></div>
+        <div class="profile-assessment-progress"><i style="width:${answered / assessment.questions.length * 100}%"></i></div>
+        <button type="button" data-assessment-close aria-label="暂时退出">×</button>
+      </header>
+      <div class="profile-assessment-layout">
+        <aside class="profile-assessment-sheet">
+          <p>已答 ${answered} / ${assessment.questions.length}</p>
+          <div>${assessment.questions.map((item, itemIndex) => `<button type="button" data-assessment-index="${itemIndex}" class="${itemIndex === index ? 'active' : ''} ${state.profileAssessment.answers[item.id] ? 'answered' : ''}">${itemIndex + 1}</button>`).join('')}</div>
+        </aside>
+        <main class="profile-assessment-question">
+          <div class="profile-assessment-meta"><span>${escapeHtml(question.subject)}</span><span>${escapeHtml(question.chapter || '综合')}</span><span>${escapeHtml(question.difficulty || '基础')}</span>${multiple ? '<span>多选</span>' : ''}</div>
+          <h2>${escapeHtml(question.content)}</h2>
+          ${images.length ? `<div class="question-image-wrap">${images.map(src => `<img class="question-image" src="${escapeHtml(src)}" alt="题目配图">`).join('')}</div>` : ''}
+          <div class="profile-assessment-options">${(question.options || []).map(option => {
+            const letter = option.charAt(0);
+            return `<button type="button" data-assessment-option="${letter}" class="${selected.includes(letter) ? 'selected' : ''}"><b>${letter}</b><span>${escapeHtml(option.substring(2).trim() || option)}</span></button>`;
+          }).join('')}</div>
+          <footer>
+            <button type="button" data-assessment-prev ${index === 0 ? 'disabled' : ''}>上一题</button>
+            ${index === assessment.questions.length - 1
+              ? `<button type="button" class="primary" data-assessment-submit ${answered < assessment.questions.length ? 'disabled' : ''}>提交并生成画像</button>`
+              : '<button type="button" class="primary" data-assessment-next>下一题</button>'}
+          </footer>
+        </main>
+      </div>
+    </section>`;
+  window.KaoyanRuntime.renderMath(modal);
+  document.body.classList.add('profile-assessment-open');
+  modal.querySelector('[data-assessment-close]').addEventListener('click', closeProfileAssessment);
+  modal.querySelectorAll('[data-assessment-index]').forEach(button => button.addEventListener('click', () => {
+    state.profileAssessment.index = Number(button.dataset.assessmentIndex);
+    saveProfileAssessmentDraft();
+    renderProfileAssessmentModal();
+  }));
+  modal.querySelectorAll('[data-assessment-option]').forEach(button => button.addEventListener('click', () => {
+    const current = normalizeAnswerLetters(state.profileAssessment.answers[question.id]);
+    if (multiple) {
+      const values = new Set(current.split('').filter(Boolean));
+      if (values.has(button.dataset.assessmentOption)) values.delete(button.dataset.assessmentOption);
+      else values.add(button.dataset.assessmentOption);
+      state.profileAssessment.answers[question.id] = normalizeAnswerLetters([...values].join(''));
+    } else {
+      state.profileAssessment.answers[question.id] = button.dataset.assessmentOption;
+    }
+    saveProfileAssessmentDraft();
+    renderProfileAssessmentModal();
+  }));
+  modal.querySelector('[data-assessment-prev]')?.addEventListener('click', () => {
+    state.profileAssessment.index -= 1; saveProfileAssessmentDraft(); renderProfileAssessmentModal();
+  });
+  modal.querySelector('[data-assessment-next]')?.addEventListener('click', () => {
+    state.profileAssessment.index += 1; saveProfileAssessmentDraft(); renderProfileAssessmentModal();
+  });
+  modal.querySelector('[data-assessment-submit]')?.addEventListener('click', submitProfileAssessment);
+}
+
+function closeProfileAssessment() {
+  saveProfileAssessmentDraft();
+  document.getElementById('profileAssessmentModal')?.remove();
+  document.body.classList.remove('profile-assessment-open');
+}
+
+async function logoutAccount() {
+  try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (_) {}
+  setToken('');
+  try {
+    localStorage.removeItem('kaoyan_user');
+    sessionStorage.removeItem('kaoyan_user');
+  } catch (_) {}
+  window.location.replace('/');
+}
+
+function closeAccountSettingsModal() {
+  document.getElementById('accountSettingsModal')?.remove();
+  document.body.classList.remove('account-settings-open');
+}
+
+function openAccountSettingsModal(account) {
+  closeAccountSettingsModal();
+  const modal = document.createElement('div');
+  modal.id = 'accountSettingsModal';
+  modal.className = 'account-settings-modal';
+  modal.innerHTML = `
+    <div class="account-settings-backdrop" data-account-close></div>
+    <section class="account-settings-dialog" role="dialog" aria-modal="true" aria-label="账号与安全设置">
+      <header><div><span>ACCOUNT CENTER</span><h2>账号与安全</h2></div><button type="button" data-account-close aria-label="关闭">×</button></header>
+      <div class="account-settings-body">
+        <section><h3>手机号</h3>
+          <p>${account.phone_verified ? `已绑定：<strong>${escapeHtml(account.phone_masked || '')}</strong>，可换绑其他手机号。` : '绑定后可用于登录和找回密码。'}</p>
+          <label>手机号<input id="accountPhone" type="tel" maxlength="11" inputmode="numeric" placeholder="请输入 11 位手机号"></label>
+          <label>验证码
+            <span class="account-code-row">
+              <input id="accountPhoneCode" type="text" maxlength="6" inputmode="numeric" placeholder="6 位验证码">
+              <button type="button" class="secondary" id="sendBindCodeBtn">获取验证码</button>
+            </span>
+          </label>
+          <button type="button" class="primary" id="bindPhoneBtn">${account.phone_verified ? '换绑手机号' : '绑定手机号'}</button>
+          <div class="account-form-msg" id="phoneMsg"></div>
+        </section>
+        <section><h3>微信号</h3><p>用于客服沟通，不会公开展示。</p>
+          <label>微信号<input id="accountWechat" maxlength="64" value="${escapeHtml(account.wechat_id || '')}" placeholder="请输入微信号"></label>
+          <button type="button" class="primary" id="saveWechatBtn">保存微信号</button><div class="account-form-msg" id="wechatMsg"></div>
+        </section>
+        <section><h3>修改密码</h3><p>修改后请使用新密码再次登录。</p>
+          <label>当前密码<input id="currentPassword" type="password" autocomplete="current-password"></label>
+          <label>新密码<input id="newPassword" type="password" minlength="6" autocomplete="new-password"></label>
+          <button type="button" class="primary" id="changePasswordBtn">修改密码</button><div class="account-form-msg" id="passwordMsg"></div>
+        </section>
+        <section class="account-service"><h3>需要帮助？</h3><p>客服电话与微信同号</p><strong>17635575899</strong></section>
+      </div>
+    </section>`;
+  document.body.appendChild(modal);
+  document.body.classList.add('account-settings-open');
+  modal.querySelectorAll('[data-account-close]').forEach(item => item.addEventListener('click', closeAccountSettingsModal));
+
+  const showMessage = (id, text, success = false) => {
+    const element = document.getElementById(id);
+    if (element) { element.textContent = text; element.className = `account-form-msg ${success ? 'success' : 'error'}`; }
+  };
+
+  // 手机号：获取验证码（60 秒冷却）
+  const sendBindCodeBtn = document.getElementById('sendBindCodeBtn');
+  sendBindCodeBtn?.addEventListener('click', async () => {
+    const phone = document.getElementById('accountPhone')?.value.trim() || '';
+    if (!/^1[3-9]\d{9}$/.test(phone)) return showMessage('phoneMsg', '请输入有效的手机号');
+    sendBindCodeBtn.disabled = true;
+    try {
+      const response = await fetch('/api/auth/sms/request', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, purpose: 'bind' })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || '验证码发送失败');
+      showMessage('phoneMsg', data.message || '验证码已发送', true);
+      let left = 60;
+      const label = sendBindCodeBtn.textContent;
+      sendBindCodeBtn.textContent = `${left}s`;
+      const timer = setInterval(() => {
+        left -= 1;
+        if (left <= 0) { clearInterval(timer); sendBindCodeBtn.disabled = false; sendBindCodeBtn.textContent = label; }
+        else { sendBindCodeBtn.textContent = `${left}s`; }
+      }, 1000);
+    } catch (error) {
+      sendBindCodeBtn.disabled = false;
+      showMessage('phoneMsg', error.message || '验证码发送失败');
+    }
+  });
+
+  // 手机号：绑定 / 换绑
+  document.getElementById('bindPhoneBtn')?.addEventListener('click', async () => {
+    const phone = document.getElementById('accountPhone')?.value.trim() || '';
+    const phoneCode = document.getElementById('accountPhoneCode')?.value.trim() || '';
+    if (!/^1[3-9]\d{9}$/.test(phone)) return showMessage('phoneMsg', '请输入有效的手机号');
+    if (!/^\d{6}$/.test(phoneCode)) return showMessage('phoneMsg', '请输入 6 位验证码');
+    try {
+      const response = await fetch('/api/auth/account', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, phone_code: phoneCode })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.success === false) throw new Error(data.detail || data.error || '手机号绑定失败');
+      showMessage('phoneMsg', '手机号绑定成功', true);
+      setTimeout(() => { closeAccountSettingsModal(); loadProfile(); }, 700);
+    } catch (error) { showMessage('phoneMsg', error.message || '手机号绑定失败'); }
+  });
+
+  document.getElementById('saveWechatBtn')?.addEventListener('click', async () => {
+    const wechatId = document.getElementById('accountWechat')?.value.trim() || '';
+    try {
+      const response = await fetch('/api/auth/account', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ wechat_id: wechatId }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.success === false) throw new Error(data.detail || data.error || '微信号保存失败');
+      showMessage('wechatMsg', '微信号已保存', true); setTimeout(() => { closeAccountSettingsModal(); loadProfile(); }, 700);
+    } catch (error) { showMessage('wechatMsg', error.message || '微信号保存失败'); }
+  });
+  document.getElementById('changePasswordBtn')?.addEventListener('click', async () => {
+    const currentPassword = document.getElementById('currentPassword')?.value || '';
+    const newPassword = document.getElementById('newPassword')?.value || '';
+    if (newPassword.length < 6) return showMessage('passwordMsg', '新密码至少 6 位');
+    try {
+      const response = await fetch('/api/auth/change-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.success === false) throw new Error(data.detail || data.error || '密码修改失败');
+      showMessage('passwordMsg', '密码修改成功，即将退出重新登录', true); setTimeout(logoutAccount, 900);
+    } catch (error) { showMessage('passwordMsg', error.message || '密码修改失败'); }
+  });
+}
+
+async function submitProfileAssessment() {
+  const current = state.profileAssessment.current;
+  const allAnswered = current?.questions?.every(question => normalizeAnswerLetters(state.profileAssessment.answers[question.id]));
+  if (!current || !allAnswered) return;
+  const button = document.querySelector('[data-assessment-submit]');
+  if (button) { button.disabled = true; button.textContent = '正在生成画像…'; }
+  try {
+    const response = await fetch('/user/profile-assessment/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        assessment_id: current.id,
+        answers: state.profileAssessment.answers,
+        duration_seconds: Math.round((Date.now() - state.profileAssessment.startedAt) / 1000),
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || '画像生成失败');
+    try { localStorage.removeItem(profileAssessmentDraftKey(current.id)); } catch (_) {}
+    try { localStorage.removeItem(profileAssessmentReminderKey()); } catch (_) {}
+    const result = data.assessment?.result || {};
+    const modal = document.getElementById('profileAssessmentModal');
+    if (modal) modal.innerHTML = `
+      <div class="profile-assessment-backdrop"></div>
+      <section class="profile-assessment-result">
+        <span>PROFILE READY</span><h2>你的初始学习画像已建立</h2>
+        <strong>${Number(result.accuracy || 0).toFixed(1)}%</strong>
+        <p>答对 ${result.correct_count || 0} / ${result.question_count || 40} 题。此后所有个性化分析都会同时依据本次测评和题库中的后续作答动态更新。</p>
+        <div>${Object.entries(result.subjects || {}).map(([subject, item]) => `<article><span>${escapeHtml(subject)}</span><b>${Number(item.accuracy || 0).toFixed(1)}%</b><small>${item.correct}/${item.total}</small></article>`).join('')}</div>
+        <button type="button" data-assessment-finish>查看完整画像</button>
+      </section>`;
+    modal?.querySelector('[data-assessment-finish]')?.addEventListener('click', async () => {
+      closeProfileAssessment();
+      await loadProfile();
+    });
+  } catch (error) {
+    alert(error.message || '画像生成失败');
+    if (button) { button.disabled = false; button.textContent = '提交并生成画像'; }
   }
 }
 
 // ========== 错题复习模式 ==========
 async function startWrongBookReview() {
-  const area = document.getElementById('reviewSessionArea');
+  const area = document.getElementById('dashReviewSessionArea');
   if (!area) return;
   area.style.display = 'block';
   area.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-secondary);">正在生成复习卷...</div>';
@@ -3712,7 +4420,7 @@ async function startWrongBookReview() {
           '<div style="font-size:48px;font-weight:700;color:' + (pct >= 80 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444') + ';">' + pct + '%</div>' +
           '<div style="color:var(--text-secondary);margin:8px 0;">正确 ' + correctCount + ' / ' + data.questions.length + '</div>' +
           '<div style="color:var(--text-secondary);font-size:13px;">剩余待复习：' + (data.remaining || 0) + ' 题</div>' +
-          '<button onclick="document.getElementById(\'reviewSessionArea\').style.display=\'none\'" style="margin-top:16px;border:0;border-radius:10px;padding:10px 24px;background:var(--primary);color:#fff;cursor:pointer;">关闭</button>' +
+          '<button onclick="document.getElementById(\'dashReviewSessionArea\').style.display=\'none\'" style="margin-top:16px;border:0;border-radius:10px;padding:10px 24px;background:var(--primary);color:#fff;cursor:pointer;">关闭</button>' +
           '</div>';
         return;
       }

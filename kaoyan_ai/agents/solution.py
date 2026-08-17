@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 from kaoyan_ai.agents.base import AgentBase
 from kaoyan_ai.rag import LocalRetriever
 from kaoyan_ai.schemas import AgentRequest, AgentResponse, Intent, RetrievedItem
@@ -16,16 +18,23 @@ class SolutionAgent(AgentBase):
         """召回相关例题，并要求模型给出带踩分点的讲解。"""
 
         retrieval_query = self.contextual_retrieval_query(request)
-        question_hits = self.retriever.retrieve(
-            retrieval_query,
-            collection="question_bank",
-            k=3,
-        )
-        knowledge_hits = self.retriever.retrieve(
-            retrieval_query,
-            collection="knowledge_points",
-            k=4,
-        )
+        # The two collections are independent. Retrieve them concurrently while
+        # preserving the same evidence set and final ordering used before.
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="chat-rag") as pool:
+            question_future = pool.submit(
+                self.retriever.retrieve,
+                retrieval_query,
+                collection="question_bank",
+                k=3,
+            )
+            knowledge_future = pool.submit(
+                self.retriever.retrieve,
+                retrieval_query,
+                collection="knowledge_points",
+                k=4,
+            )
+            question_hits = question_future.result()
+            knowledge_hits = knowledge_future.result()
         retrieved = []
         seen: set[tuple[str, str]] = set()
         for item in question_hits + knowledge_hits:

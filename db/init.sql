@@ -21,6 +21,12 @@ CREATE TABLE users (
     user_id            VARCHAR(64)  UNIQUE NOT NULL,   -- 业务 ID（如 u1）
     username           VARCHAR(64)  UNIQUE,
     password_hash      TEXT,
+    invite_code        VARCHAR(16) UNIQUE,
+    invited_by         INTEGER REFERENCES users(id),
+    phone              VARCHAR(20) UNIQUE,
+    wechat_id          VARCHAR(64),
+    phone_verified_at  TIMESTAMP,
+    password_changed_at TIMESTAMP,
     nickname           VARCHAR(64),
     target_school      TEXT,
     target_major       TEXT,

@@ -605,8 +605,10 @@
   const tabRegister = $('.modal-tab[data-tab="register"]');
   const formLogin   = $('#loginForm');
   const formReg     = $('#registerForm');
+  const formForgot  = $('#forgotForm');
   const loginMsg    = $('#loginMsg');
   const regMsg      = $('#registerMsg');
+  const forgotMsg   = $('#forgotMsg');
 
   function openAuth(tab = 'login', opts = {}) {
     if (!modal) return;
@@ -616,6 +618,7 @@
     // 清空提示
     if (loginMsg) { loginMsg.textContent = ''; loginMsg.className = 'form-msg'; }
     if (regMsg)   { regMsg.textContent   = ''; regMsg.className   = 'form-msg'; }
+    if (forgotMsg) { forgotMsg.textContent = ''; forgotMsg.className = 'form-msg'; }
     if (opts.intent) {
       if (loginMsg && tab === 'login') {
         loginMsg.textContent = opts.intent;
@@ -641,58 +644,11 @@
     $$('.modal-form').forEach(f => f.classList.toggle('active', f.dataset.form === tab));
   }
 
-  // ---- 内测提示弹窗(注册入口用) ----
-  function showClosedNotice() {
-    let mask = document.getElementById('closedNoticeMask');
-    if (!mask) {
-      mask = document.createElement('div');
-      mask.id = 'closedNoticeMask';
-      mask.style.cssText = [
-        'position:fixed', 'inset:0', 'z-index:9999',
-        'background:rgba(8,12,28,0.78)', 'backdrop-filter:blur(8px)',
-        'display:flex', 'align-items:center', 'justify-content:center',
-        'animation:closedFadeIn .25s ease'
-      ].join(';');
-      mask.innerHTML = `
-        <div style="position:relative;max-width:420px;width:calc(100% - 40px);background:linear-gradient(160deg,#0f1530 0%,#1a1f44 100%);border:1px solid rgba(120,140,255,0.35);border-radius:18px;padding:32px 28px 26px;box-shadow:0 20px 60px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.08);text-align:center;color:#e8ecff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;">
-          <div style="width:64px;height:64px;margin:0 auto 18px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(99,102,241,0.5);">
-            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-            </svg>
-          </div>
-          <h3 style="margin:0 0 10px;font-size:20px;font-weight:600;letter-spacing:0.5px;">注册功能暂未开放</h3>
-          <p style="margin:0 0 6px;font-size:14px;line-height:1.7;color:#b8c0e8;">目前正处于内测阶段,暂不支持注册。</p>
-          <p style="margin:0 0 18px;font-size:14px;line-height:1.7;color:#b8c0e8;">如想体验,请联系:</p>
-          <a href="tel:17635575899" style="display:inline-block;font-size:22px;font-weight:700;color:#a5b4fc;letter-spacing:1.2px;text-decoration:none;padding:10px 24px;border:1.5px solid rgba(165,180,252,0.5);border-radius:999px;background:rgba(99,102,241,0.12);transition:all .2s;" onmouseover="this.style.background='rgba(99,102,241,0.28)';this.style.borderColor='rgba(165,180,252,0.9)'" onmouseout="this.style.background='rgba(99,102,241,0.12)';this.style.borderColor='rgba(165,180,252,0.5)'">176-3557-5899</a>
-          <button id="closedNoticeClose" style="margin-top:22px;display:block;width:100%;padding:11px 0;border:none;border-radius:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-size:14px;font-weight:500;cursor:pointer;letter-spacing:1px;box-shadow:0 4px 14px rgba(99,102,241,0.4);" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">我知道了</button>
-        </div>
-        <style>
-          @keyframes closedFadeIn{from{opacity:0}to{opacity:1}}
-        </style>
-      `;
-      document.body.appendChild(mask);
-      mask.addEventListener('click', e => { if (e.target === mask) mask.remove(); });
-      mask.querySelector('#closedNoticeClose').addEventListener('click', () => mask.remove());
-      document.addEventListener('keydown', function esc(e) {
-        if (e.key === 'Escape' && document.getElementById('closedNoticeMask')) {
-          mask.remove();
-          document.removeEventListener('keydown', esc);
-        }
-      });
-    }
-  }
-
   $$('#openLoginBtn, #footerLoginLink').forEach(b => b.addEventListener('click', e => { e.preventDefault(); openAuth('login'); }));
-  // 内测阶段：所有“注册”入口改为内测提示
   $$('#openRegisterBtn, #footerRegisterLink, #finalRegisterBtn, #loginFootRegister').forEach(b => b.addEventListener('click', e => {
     e.preventDefault();
-    showClosedNotice();
+    openAuth('register');
   }));
-  // 注册 tab 切换 / 模态内"立即注册"链接也指向内测提示
-  if (tabRegister) tabRegister.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); showClosedNotice(); });
-  $$('[data-switch="register"]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); showClosedNotice(); }));
-  // 注册表单即使显示也直接拦截提交
-  if (formReg) formReg.addEventListener('submit', e => { e.preventDefault(); showClosedNotice(); });
   if (modalClose) modalClose.addEventListener('click', closeAuth);
   if (modal) modal.addEventListener('click', e => { if (e.target === modal) closeAuth(); });
   $$('.modal-tab').forEach(t => t.addEventListener('click', () => switchTab(t.dataset.tab)));
@@ -761,6 +717,9 @@
       const userId      = (fd.get('username') || '').toString().trim();
       const password    = (fd.get('password') || '').toString();
       const nickname    = (fd.get('display_name') || '').toString().trim();
+      const inviteCode  = (fd.get('invite_code') || '').toString().trim().toUpperCase();
+      const phone       = (fd.get('phone') || '').toString().trim();
+      const phoneCode   = (fd.get('phone_code') || '').toString().trim();
 
       if (!/^[A-Za-z0-9_.-]{2,32}$/.test(userId)) {
         regMsg.textContent = '用户名为 2-32 位字母/数字/下划线/点/中划线';
@@ -769,6 +728,16 @@
       }
       if (password.length < 6) {
         regMsg.textContent = '密码至少 6 位';
+        regMsg.className = 'form-msg error';
+        return;
+      }
+      if (phone && !/^1[3-9]\d{9}$/.test(phone)) {
+        regMsg.textContent = '请输入有效的手机号，或留空';
+        regMsg.className = 'form-msg error';
+        return;
+      }
+      if (phone && !/^\d{6}$/.test(phoneCode)) {
+        regMsg.textContent = '填写了手机号时请先获取并填写 6 位验证码';
         regMsg.className = 'form-msg error';
         return;
       }
@@ -782,7 +751,10 @@
           body: JSON.stringify({
             user_id: userId,
             password,
-            nickname: nickname || undefined
+            nickname: nickname || undefined,
+            invite_code: inviteCode || undefined,
+            phone: phone || undefined,
+            phone_code: phone ? phoneCode : undefined
           })
         });
         const data = await res.json().catch(() => ({}));
@@ -792,14 +764,12 @@
           return;
         }
         const token = data.token || data.access_token || data.jwt;
-        if (token) {
-          localStorage.setItem(STORAGE_TOKEN, token);
-          localStorage.setItem(STORAGE_USER, JSON.stringify(data.user || { user_id: userId, nickname }));
-        }
+        storeSessionToken(token || '');
+        localStorage.setItem(STORAGE_USER, JSON.stringify(data.user || { user_id: userId, nickname }));
         regMsg.textContent = '注册成功，正在为你打开学习舱...';
         regMsg.className = 'form-msg success';
         toast('注册成功', 'success');
-        setTimeout(() => { window.location.href = '/'; }, 800);
+        setTimeout(() => { window.location.href = '/app'; }, 800);
       } catch (err) {
         console.error(err);
         regMsg.textContent = '网络异常，请稍后再试';
@@ -807,6 +777,107 @@
       }
     });
   }
+
+  // 通用倒计时：发送验证码按钮 60 秒冷却
+  function startCodeCountdown(btn, seconds = 60) {
+    if (!btn) return;
+    let left = seconds;
+    const original = btn.dataset.label || btn.textContent;
+    btn.dataset.label = original;
+    btn.disabled = true;
+    btn.textContent = `${left}s 后重发`;
+    const timer = setInterval(() => {
+      left -= 1;
+      if (left <= 0) {
+        clearInterval(timer);
+        btn.disabled = false;
+        btn.textContent = original;
+      } else {
+        btn.textContent = `${left}s 后重发`;
+      }
+    }, 1000);
+  }
+
+  // 注册：获取手机验证码
+  const sendRegisterCodeBtn = $('[data-send-register-code]');
+  if (sendRegisterCodeBtn && formReg) {
+    sendRegisterCodeBtn.addEventListener('click', async () => {
+      const phone = (new FormData(formReg).get('phone') || '').toString().trim();
+      if (!/^1[3-9]\d{9}$/.test(phone)) {
+        regMsg.textContent = '请先填写有效手机号'; regMsg.className = 'form-msg error'; return;
+      }
+      sendRegisterCodeBtn.disabled = true;
+      try {
+        const response = await fetch('/api/auth/sms/request', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, purpose: 'register' })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || '验证码发送失败');
+        regMsg.textContent = data.message || '验证码已发送'; regMsg.className = 'form-msg success';
+        startCodeCountdown(sendRegisterCodeBtn);
+      } catch (error) {
+        sendRegisterCodeBtn.disabled = false;
+        regMsg.textContent = error.message || '验证码发送失败'; regMsg.className = 'form-msg error';
+      }
+    });
+  }
+
+  const sendResetCodeBtn = $('[data-send-reset-code]');
+  if (sendResetCodeBtn && formForgot) {
+    sendResetCodeBtn.addEventListener('click', async () => {
+      const phone = new FormData(formForgot).get('phone')?.toString().trim() || '';
+      if (!/^1[3-9]\d{9}$/.test(phone)) {
+        forgotMsg.textContent = '请先填写有效手机号'; forgotMsg.className = 'form-msg error'; return;
+      }
+      sendResetCodeBtn.disabled = true;
+      try {
+        const response = await fetch('/api/auth/sms/request', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, purpose: 'reset' })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || '验证码发送失败');
+        forgotMsg.textContent = data.message || '验证码已发送'; forgotMsg.className = 'form-msg success';
+        startCodeCountdown(sendResetCodeBtn);
+      } catch (error) {
+        sendResetCodeBtn.disabled = false;
+        forgotMsg.textContent = error.message || '验证码发送失败'; forgotMsg.className = 'form-msg error';
+      }
+    });
+  }
+
+  if (formForgot) {
+    formForgot.addEventListener('submit', async event => {
+      event.preventDefault();
+      const form = new FormData(formForgot);
+      const payload = {
+        phone: form.get('phone')?.toString().trim(),
+        code: form.get('code')?.toString().trim(),
+        new_password: form.get('new_password')?.toString() || '',
+      };
+      if (!/^1[3-9]\d{9}$/.test(payload.phone || '') || !/^\d{6}$/.test(payload.code || '') || payload.new_password.length < 6) {
+        forgotMsg.textContent = '请完整填写手机号、6 位验证码和至少 6 位的新密码'; forgotMsg.className = 'form-msg error'; return;
+      }
+      try {
+        const response = await fetch('/api/auth/reset-password', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.success === false) throw new Error(data.detail || data.error || '密码重置失败');
+        forgotMsg.textContent = '密码已重置，请使用新密码登录'; forgotMsg.className = 'form-msg success';
+        setTimeout(() => openAuth('login'), 900);
+      } catch (error) {
+        forgotMsg.textContent = error.message || '密码重置失败'; forgotMsg.className = 'form-msg error';
+      }
+    });
+  }
+
+  $$('[data-copy-contact]').forEach(link => link.addEventListener('click', async event => {
+    event.preventDefault();
+    try { await navigator.clipboard.writeText('17635575899'); toast('客服微信已复制'); }
+    catch (_) { toast('客服微信：17635575899'); }
+  }));
 
   // ---- 已登录态：自动替换 CTA 行为 ----
   (function syncAuthState() {

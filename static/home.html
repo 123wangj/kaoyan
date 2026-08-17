@@ -6,7 +6,7 @@
   <title>408 Pilot · 考研 AI 学习舱 | 智能备考平台</title>
   <meta name="description" content="408 Pilot - 面向计算机考研的 AI 学习平台，集成知识图谱、智能刷题、个性化计划与全科复盘。" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="stylesheet" href="/static/home.css?v=20260731-login-fix-1" />
+  <link rel="stylesheet" href="/static/home.css?v=20260817-phone-auth-1" />
 </head>
 <body>
   <!-- 滚动进度条 -->
@@ -726,6 +726,11 @@
           <a href="#" id="footerLoginLink">登录</a>
           <a href="#" id="footerRegisterLink">注册</a>
         </div>
+        <div>
+          <h5>客服</h5>
+          <a href="tel:17635575899">电话：17635575899</a>
+          <a href="#" data-copy-contact>微信：17635575899</a>
+        </div>
       </div>
     </div>
     <div class="footer-bottom">
@@ -740,14 +745,15 @@
       <button class="modal-close" id="modalClose" aria-label="关闭">×</button>
       <div class="modal-tabs">
         <button class="modal-tab active" data-tab="login">登录</button>
+        <button class="modal-tab" data-tab="register">注册</button>
       </div>
 
       <form class="modal-form active" id="loginForm" data-form="login">
         <h3>欢迎回来</h3>
         <p class="modal-sub">登录后同步你的学习画像、刷题记录与错题本。</p>
         <label>
-          <span>用户名</span>
-          <input type="text" name="username" placeholder="请输入用户名" required autocomplete="username" />
+          <span>用户名 / 手机号</span>
+          <input type="text" name="username" placeholder="用户名或已绑定的手机号" required autocomplete="username" />
         </label>
         <label>
           <span>密码</span>
@@ -756,15 +762,35 @@
         <div class="form-msg" id="loginMsg"></div>
         <button class="btn btn-primary btn-block" type="submit">登录</button>
         <div class="modal-foot">
-          还没有账号？<a href="#" id="loginFootRegister">联系管理员开通</a>
+          <a href="#" id="loginFootRegister">注册账号</a>
         </div>
       </form>
+
+      <form class="modal-form" id="registerForm" data-form="register">
+        <h3>创建学习账号</h3>
+        <p class="modal-sub">注册后自动获得你的专属邀请码。</p>
+        <label><span>用户名</span><input type="text" name="username" placeholder="2–32 位字母、数字或 _.-" required autocomplete="username" /></label>
+        <label><span>昵称（选填）</span><input type="text" name="display_name" placeholder="怎么称呼你" maxlength="32" /></label>
+        <label><span>密码</span><input type="password" name="password" placeholder="至少 6 位" required autocomplete="new-password" /></label>
+        <label><span>手机号（选填，可用于登录/找回密码）</span><input type="tel" name="phone" placeholder="11 位手机号" maxlength="11" autocomplete="tel" /></label>
+        <label class="sms-code-row"><span>短信验证码</span>
+          <span class="sms-code-inputs">
+            <input type="text" name="phone_code" placeholder="6 位验证码" maxlength="6" inputmode="numeric" autocomplete="one-time-code" />
+            <button type="button" class="btn btn-ghost" data-send-register-code>获取验证码</button>
+          </span>
+        </label>
+        <label><span>邀请码（选填）</span><input type="text" name="invite_code" placeholder="有邀请码可填写" maxlength="24" autocomplete="off" /></label>
+        <div class="form-msg" id="registerMsg"></div>
+        <button class="btn btn-primary btn-block" type="submit">注册并进入学习舱</button>
+        <div class="modal-foot">已有账号？<a href="#" data-switch="login">立即登录</a></div>
+      </form>
+
     </div>
   </div>
 
   <!-- 全局消息提示 -->
   <div class="toast" id="toast"></div>
 
-  <script src="/static/home.js?v=20260731-login-fix-1"></script>
+  <script src="/static/home.js?v=20260817-phone-auth-1"></script>
 </body>
 </html>

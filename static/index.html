@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>408 Pilot | 考研 AI 学习舱</title>
-  <link rel="stylesheet" href="/static/styles.css?v=20260807-tablet-landscape-1" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260817-phone-auth-1" />
   <script src="/static/app-runtime.js?v=20260804-knowledge-visual-2"></script>
 </head>
 <body>
@@ -61,9 +61,13 @@
         <div class="user-info">
           <div class="user-avatar">研</div>
           <div class="user-details">
-            <div class="user-name">考研er</div>
+            <div class="user-name" id="sidebarUserName">考研er</div>
             <div class="user-status">冲刺学习中</div>
           </div>
+        </div>
+        <div class="sidebar-account-actions">
+          <button type="button" id="customerServiceBtn" title="联系客服">客服</button>
+          <button type="button" id="logoutBtn" title="退出当前账号">退出</button>
         </div>
       </div>
     </nav>
@@ -250,9 +254,19 @@
             </div>
 
             <div class="dash-card dash-notice-card">
-              <div class="dash-card-title">今日作战提示</div>
+              <div class="dash-card-title-row daily-goal-row">
+                <span>今日作战提示</span>
+                <label class="daily-goal-control">每日
+                  <input id="dailyGoalInput" type="number" min="1" max="100" value="5" inputmode="numeric" aria-label="每日刷题目标">
+                  题
+                  <button id="saveDailyGoalBtn" type="button">保存</button>
+                </label>
+              </div>
               <div class="notice-list" id="noticeList">
                 <div class="notice-empty">加载中...</div>
+              </div>
+              <div class="rolling-review" id="rollingReviewPanel">
+                <div class="notice-empty">正在读取昨日复盘...</div>
               </div>
             </div>
 
@@ -274,6 +288,20 @@
             </div>
             <div class="subjects-progress-grid" id="subjectsProgressGrid"></div>
           </div>
+
+          <div class="dash-wrongbook-section" id="dashWrongBookSection">
+            <div class="dash-section-header">
+              <span>📝 错题本</span>
+              <div class="dash-wrongbook-actions">
+                <button id="dashStartReviewBtn" type="button" class="dash-wrongbook-review-btn" style="display:none;"></button>
+                <select id="dashWrongBookSubjectFilter" class="filter-select"><option value="all">全部学科</option></select>
+              </div>
+            </div>
+            <div class="dash-wrongbook-list" id="dashWrongBookList">
+              <div class="notice-empty">加载中...</div>
+            </div>
+            <div id="dashReviewSessionArea" style="display:none;"></div>
+          </div>
         </div>
       </section>
 
@@ -294,6 +322,7 @@
                   <option value="操作系统">操作系统</option>
                   <option value="计算机网络">计算机网络</option>
                 </select>
+                <select class="filter-select" id="knowledgePointFilter"><option value="all">全部知识点</option></select>
                 <select class="filter-select" id="yearFilter"><option value="all">全部年份</option></select>
                 <select class="filter-select" id="statusFilter">
                   <option value="all">全部状态</option>
@@ -311,7 +340,8 @@
 
           <div class="question-grid-container">
             <div class="subject-tabs">
-              <button class="subject-tab active" data-subject="数据结构">数据结构</button>
+              <button class="subject-tab active" data-subject="all">全部科目</button>
+              <button class="subject-tab" data-subject="数据结构">数据结构</button>
               <button class="subject-tab" data-subject="计算机组成原理">计算机组成原理</button>
               <button class="subject-tab" data-subject="操作系统">操作系统</button>
               <button class="subject-tab" data-subject="计算机网络">计算机网络</button>
@@ -418,6 +448,7 @@
                 </div>
                 <div class="modal-question-actions">
                   <button class="primary-btn" id="showAnswerBtn">查看答案</button>
+                  <button class="next-question-btn question-prev-btn" id="prevQuestionBtn" type="button"><span aria-hidden="true">←</span> 上一题</button>
                   <button class="next-question-btn" id="nextQuestionBtn" type="button">下一题 <span aria-hidden="true">→</span></button>
                 </div>
               </div>
@@ -533,7 +564,7 @@
           <div class="view-header">
             <span class="eyebrow">PROFILE</span>
             <h1 class="view-title">个人中心</h1>
-            <p class="view-subtitle">查看正确率、薄弱点和错题沉淀。</p>
+            <p class="view-subtitle">查看正确率、薄弱点与知识点掌握度。</p>
           </div>
           <div id="profileContent" class="profile-content"><div class="loading">正在加载学习画像...</div></div>
         </div>
@@ -615,7 +646,7 @@
     </main>
   </div>
 
-  <script src="/static/app.js?v=20260806-linked-visual-6"></script>
+  <script src="/static/app.js?v=20260817-phone-auth-1"></script>
 
   <div class="knowledge-visual-modal hidden" id="knowledgeVisualModal" role="dialog" aria-modal="true" aria-labelledby="knowledgeVisualTitle">
     <div class="knowledge-visual-backdrop" data-knowledge-visual-close></div>

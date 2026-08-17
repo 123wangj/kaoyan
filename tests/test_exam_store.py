@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from kaoyan_ai.exam_store import (
+    EXAM_DISTRIBUTION,
     SUBJECTS,
     create_exam,
     get_exam,
@@ -40,6 +41,22 @@ def test_exam_is_balanced_private_and_persisted(tmp_path: Path):
     assert all("answer" not in question for question in exam["questions"])
     assert list_exams(tmp_path, "alice")[0]["status"] == "in_progress"
     assert list_exams(tmp_path, "bob") == []
+
+
+def test_40_question_exam_matches_real_408_subject_distribution(tmp_path: Path):
+    exam = create_exam(tmp_path, "alice", _questions(), 40)
+    subjects = [question["subject"] for question in exam["questions"]]
+
+    assert Counter(subjects) == Counter(EXAM_DISTRIBUTION)
+    assert subjects == sorted(subjects, key=SUBJECTS.index)
+
+
+def test_exam_excludes_multiple_choice_questions(tmp_path: Path):
+    questions = _questions()
+    questions[0]["answer"] = "AC"
+    exam = create_exam(tmp_path, "alice", questions, 40)
+
+    assert questions[0]["id"] not in {question["id"] for question in exam["questions"]}
 
 
 def test_submit_scores_and_builds_report_without_mutating_learning_state(tmp_path: Path):

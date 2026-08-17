@@ -1,11 +1,11 @@
-const CACHE_NAME = 'kaoyan-shell-20260807-tablet-landscape-1';
+const CACHE_NAME = 'kaoyan-shell-20260811-account-center-1';
 const SHELL = [
-  '/static/styles.css?v=20260807-tablet-landscape-1',
+  '/static/styles.css?v=20260811-account-center-1',
   '/static/app-runtime.js?v=20260804-knowledge-visual-2',
-  '/static/app.js?v=20260804-knowledge-visual-2',
+  '/static/app.js?v=20260811-account-center-1',
   '/static/views/school-selection.js?v=dev',
-  '/static/home.css?v=20260731-login-fix-1',
-  '/static/home.js?v=20260731-login-fix-1'
+  '/static/home.css?v=20260811-account-center-1',
+  '/static/home.js?v=20260811-account-center-1'
 ];
 
 self.addEventListener('install', event => {

@@ -91,11 +91,19 @@ test.beforeEach(async ({ page }) => {
     json: { by_subject_backend: {} }
   }));
   await page.route('**/user/**', route => route.fulfill({ json: {} }));
+  // 更具体的路由需注册在通用 `/user/**` 之后（Playwright 后注册者优先）。
+  // 已完成画像可避免「快速画像」提醒弹窗，其半透明遮罩会拦截卡片/按钮点击。
+  await page.route('**/user/profile-assessment/status**', route => route.fulfill({ json: {
+    available: true, question_count: 40, has_completed: true, in_progress: false
+  } }));
   await page.route('**/chat/history**', route => route.fulfill({ json: { messages: [] } }));
   await page.route('**/daily-push**', route => route.fulfill({
     json: { answer: '今日复习', memory_review: [], pushed_ids: [] }
   }));
   await page.route('**/daily-tasks/today**', route => route.fulfill({ json: { tasks: [] } }));
+  // 「昨日滚动复盘」面板会在初始化时请求该受保护接口；不 mock 会返回 401，
+  // 触发全局 fetch 包装的「登录失效 → 跳回登录页」逻辑，导致整页被重定向清空。
+  await page.route('**/daily-review/yesterday**', route => route.fulfill({ json: { date: '2026-08-08', items: [] } }));
   // Layout tests load the app shell directly; API auth is mocked above.
   await page.route('http://127.0.0.1:8010/app', route => route.fulfill({
     path: 'static/index.html',
@@ -418,7 +426,7 @@ test('tablet landscape prioritizes questions and keeps work panels usable', asyn
       viewportHeight: window.innerHeight,
     };
   });
-  expect(noteMetrics.panelWidth).toBeLessThan(noteMetrics.viewportWidth * .55);
+  expect(noteMetrics.panelWidth).toBeGreaterThan(noteMetrics.viewportWidth * .9);
   expect(noteMetrics.panelBottom).toBeLessThanOrEqual(noteMetrics.viewportHeight);
   expect(noteMetrics.editorHeight).toBeGreaterThan(360);
   await page.locator('#closeNoteBtn').click();

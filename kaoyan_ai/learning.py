@@ -24,6 +24,15 @@ _UNLABELED_MARKERS = {
 }
 
 
+def normalize_choice_answer(value: object) -> str:
+    """Normalize single or multiple choice answers to sorted unique letters."""
+    if isinstance(value, (list, tuple, set)):
+        text = "".join(str(item) for item in value)
+    else:
+        text = str(value or "")
+    return "".join(sorted(set(re.findall(r"[A-D]", text.upper()))))
+
+
 def _is_unlabeled_kp(value: object) -> bool:
     text = str(value or "").strip()
     return not text or any(marker in text for marker in _UNLABELED_MARKERS)
@@ -81,6 +90,8 @@ def load_learning_state(data_dir: Path, user_id: str) -> dict[str, Any]:
             pg_state["question_notes"] = merged_notes
             if json_state.get("study_plan"):
                 pg_state["study_plan"] = json_state["study_plan"]
+            if json_state.get("preferences"):
+                pg_state["preferences"] = json_state["preferences"]
             return _normalize_state(pg_state, user_id)
 
         if pg_state is not None and (pg_state.get("answer_records") or pg_state.get("wrong_questions")):
@@ -104,16 +115,42 @@ def save_learning_state(data_dir: Path, user_id: str, state: dict[str, Any]) -> 
         _save_state(path, _normalize_state(state, user_id))
 
 
+def answer_records_for_source(
+    data_dir: Path,
+    user_id: str,
+    source: str,
+    fallback_records: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Return records with their full source tag, including the plan task id.
+
+    PostgreSQL's legacy answer_records schema only retains a generic mode. The
+    per-user JSON mirror remains the authoritative source for task-scoped tags
+    such as ``study_plan:<task_id>``.
+    """
+    records: list[dict[str, Any]] = []
+    path = _state_path(data_dir, user_id)
+    with _LOCK:
+        try:
+            if path.exists():
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                records = payload.get("answer_records") or []
+        except (OSError, ValueError, TypeError):
+            records = []
+    if not records:
+        records = fallback_records or []
+    return [record for record in records if record.get("source") == source]
+
+
 def record_answer(data_dir: Path, payload: dict[str, Any]) -> dict[str, Any]:
     user_id = payload.get("user_id") or "u1"
     question_id = str(payload.get("question_id") or "").strip()
     subject = _canonical_subject(payload.get("subject"))
     knowledge_points = _knowledge_points(payload)
-    selected_option = str(payload.get("selected_option") or "").strip().upper()
-    correct_answer = str(payload.get("correct_answer") or "").strip().upper()
+    selected_option = normalize_choice_answer(payload.get("selected_option"))
+    correct_answer = normalize_choice_answer(payload.get("correct_answer"))
     is_correct = bool(payload.get("is_correct"))
     if correct_answer:
-        is_correct = selected_option == correct_answer[:1]
+        is_correct = selected_option == correct_answer
 
     now = _now()
     state = load_learning_state(data_dir, user_id)
@@ -262,6 +299,57 @@ def wrong_book_items(state: dict[str, Any], status: str | None = None) -> list[d
         key=lambda item: (item.get("status") == "resolved", item.get("last_wrong_at", "")),
         reverse=True,
     )
+
+
+def yesterday_review_items(
+    state: dict[str, Any],
+    questions: list[dict[str, Any]],
+    *,
+    day: str | None = None,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Return yesterday's unique attempted questions, wrong answers first."""
+    reference = date.fromisoformat(day) if day else date.today()
+    target = reference - timedelta(days=1)
+    latest: dict[str, dict[str, Any]] = {}
+    for record in state.get("answer_records") or []:
+        question_id = str(record.get("question_id") or "").strip()
+        created_at = str(record.get("created_at") or record.get("timestamp") or "")
+        if not question_id or not created_at:
+            continue
+        try:
+            if datetime.fromisoformat(created_at.replace("Z", "+00:00")).date() != target:
+                continue
+        except ValueError:
+            continue
+        previous = latest.get(question_id)
+        if previous is None or created_at >= str(previous.get("created_at") or ""):
+            latest[question_id] = record
+
+    catalog = {str(item.get("id") or ""): item for item in questions}
+    rows = []
+    for question_id, record in latest.items():
+        question = catalog.get(question_id)
+        if not question:
+            continue
+        rows.append(
+            {
+                "question_id": question_id,
+                "was_wrong": not bool(record.get("is_correct")),
+                "last_answered_at": record.get("created_at") or record.get("timestamp"),
+                "question": question,
+            }
+        )
+    rows.sort(key=lambda item: (not item["was_wrong"], str(item["last_answered_at"])))
+    return rows[: max(1, min(int(limit), 20))]
+
+
+def set_daily_question_goal(data_dir: Path, user_id: str, value: int) -> int:
+    goal = max(1, min(int(value), 100))
+    state = load_learning_state(data_dir, user_id)
+    state.setdefault("preferences", {})["daily_question_goal"] = goal
+    save_learning_state(data_dir, user_id, state)
+    return goal
 
 
 def review_wrong_question(
@@ -699,6 +787,26 @@ def today_tasks(
         save_learning_state(data_dir, user_id, state)
     cached = daily_tasks[task_date]
     tasks_changed = _normalize_daily_tasks(cached)
+    daily_goal = max(
+        1,
+        min(int((state.get("preferences") or {}).get("daily_question_goal") or 5), 100),
+    )
+    for task in cached.get("tasks") or []:
+        if task.get("id") != "mixed-practice":
+            continue
+        if int(task.get("target_count") or 0) != daily_goal:
+            task["target_count"] = daily_goal
+            task["title"] = (
+                f"完成 {daily_goal} 道薄弱点练习"
+                if task.get("has_records")
+                else f"完成 {daily_goal} 道随机练习"
+            )
+            task["description"] = re.sub(
+                r"\d+\s*道",
+                f"{daily_goal} 道",
+                str(task.get("description") or ""),
+            )
+            tasks_changed = True
     if str(cached.get("exam_signature") or "") != exam_signature:
         statuses = {
             str(task.get("id") or ""): (task.get("status"), task.get("completed_at"))
@@ -969,6 +1077,10 @@ def _build_daily_tasks(
       标为 None,前端显示"暂无做题记录"而不是写死的 50%。
     """
     has_records = bool(state.get("answer_records"))
+    daily_goal = max(
+        1,
+        min(int((state.get("preferences") or {}).get("daily_question_goal") or 5), 100),
+    )
 
     # 1) 选 3 个薄弱知识点(真实数据)或 fallback(无做题记录)
     mastery_points = mastery_items if mastery_items is not None else mastery_summary(state)
@@ -1081,19 +1193,19 @@ def _build_daily_tasks(
         mixed_desc = (
             "根据最近一周试卷报告，围绕"
             + "、".join(point["knowledge_point"] for point in exam_points[:3])
-            + "进行 5 道新题复测，优先验证高优先级薄弱点。"
+            + f"进行 {daily_goal} 道新题复测，优先验证高优先级薄弱点。"
         )
     elif has_learning_data:
         mixed_desc = "优先选择掌握度低于 75% 的知识点。"
     else:
-        mixed_desc = "系统随机抽 5 道中等题,先摸底掌握度。"
+        mixed_desc = f"系统随机抽 {daily_goal} 道中等题,先摸底掌握度。"
     tasks.append(
         {
             "id": "mixed-practice",
             "type": "practice",
-            "title": "完成 5 道薄弱点练习" if has_learning_data else "完成 5 道随机练习",
+            "title": f"完成 {daily_goal} 道薄弱点练习" if has_learning_data else f"完成 {daily_goal} 道随机练习",
             "description": mixed_desc,
-            "target_count": 5,
+            "target_count": daily_goal,
             "status": "todo",
             "has_records": has_learning_data,
             "source": "recent_exam_report" if exam_points else "learning_profile",
@@ -1318,6 +1430,7 @@ def _normalize_state(state: dict[str, Any], user_id: str) -> dict[str, Any]:
     state.setdefault("pushed_question_ids", [])
     state.setdefault("question_notes", {})
     state.setdefault("study_plan", None)  # 学习计划(若已制定)
+    state.setdefault("preferences", {})
     state["mastery"] = {
         point: data
         for point, data in state.get("mastery", {}).items()
